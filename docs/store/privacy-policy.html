@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Emberdelve — Privacy Policy</title>
+<meta name="description" content="Emberdelve collects no personal data. Optional, opt-in anonymous gameplay analytics only — off by default. No ads, no tracking.">
+<style>
+  :root {
+    --bg: #14101e;
+    --surface: #1e1830;
+    --text: #efe9dc;
+    --dim: #a89ec0;
+    --ember: #f2953f;
+    --line: #352c4e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.65 Georgia, 'Times New Roman', serif;
+  }
+  main {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+  }
+  h1 {
+    font-variant: small-caps;
+    letter-spacing: 0.04em;
+    color: var(--ember);
+    font-size: 2rem;
+    margin: 0 0 4px;
+  }
+  .updated { color: var(--dim); font-size: 0.9rem; margin-bottom: 32px; }
+  h2 {
+    font-variant: small-caps;
+    letter-spacing: 0.03em;
+    font-size: 1.25rem;
+    margin-top: 40px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 6px;
+  }
+  .promise {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--ember);
+    border-radius: 8px;
+    padding: 18px 22px;
+    font-size: 1.15rem;
+    margin: 28px 0;
+  }
+  ul { padding-left: 22px; }
+  li { margin: 10px 0; }
+  li b { color: var(--text); }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.95rem; }
+  th, td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  th { background: var(--surface); font-variant: small-caps; letter-spacing: 0.03em; }
+  a { color: var(--ember); }
+  footer { margin-top: 56px; color: var(--dim); font-size: 0.85rem; border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Emberdelve — Privacy Policy</h1>
+  <div class="updated">Last updated: 2026-07-25 · <code>com.tsorostudios.emberdelve</code></div>
+
+  <p>Emberdelve (“the app”) is a single-player pixel action-platformer
+  by Tsoro Studios (Tapiwa Makandigona).</p>
+
+  <div class="promise"><b>The short version: Emberdelve collects no personal
+  data.</b> The only thing it can ever send is anonymous gameplay statistics,
+  and only if you explicitly opt in — off by default, revocable any time in
+  Settings.</div>
+
+  <h2>Details</h2>
+  <ul>
+    <li><b>No personal data collected.</b> No accounts, no names, no email
+      addresses, no contacts, no location, no advertising identifiers, no
+      free-text input.</li>
+    <li><b>Optional, opt-in gameplay analytics.</b> On first launch the app
+      asks whether you want to share anonymous gameplay statistics (which
+      levels you play, whether you finish them, and which settings you use)
+      to help us fix bugs and improve the game. <b>Nothing is sent unless you
+      tap “Allow”</b>, and you can change your choice any time in Settings →
+      “Gameplay analytics”. If you opt in, this data is processed on our
+      behalf by <a href="https://firebase.google.com/support/privacy">Google
+      Firebase Analytics</a>. Ad personalization signals are disabled and the
+      app never accesses the advertising ID.</li>
+    <li><b>No ads, no trackers, no data sales.</b> The app contains no
+      advertising SDKs and no third-party tracking beyond the optional
+      analytics described above. We never sell or share data.</li>
+    <li><b>Local save data only.</b> Your game progress (coins, unlocks,
+      settings) is stored only in the app’s private storage on your device.
+      Deleting the app deletes it. It never leaves your device.</li>
+    <li><b>Permissions.</b> <code>VIBRATE</code> (optional in-game haptics)
+      and <code>INTERNET</code>/<code>ACCESS_NETWORK_STATE</code> (used solely
+      for the optional analytics above; if you never opt in, nothing is
+      transmitted). The Google Analytics library also adds <code>WAKE_LOCK</code>
+      and a Play Store install-referrer binding of its own; the advertising-ID
+      permissions it would normally add are removed from our build. No
+      permission requires a runtime prompt.</li>
+    <li><b>Children.</b> The app collects no personal data from anyone,
+      including children. Analytics, when enabled, are anonymous gameplay
+      statistics only.</li>
+  </ul>
+
+  <h2>Google Play data-safety summary</h2>
+  <table>
+    <tr><th>Question</th><th>Answer</th></tr>
+    <tr><td>Does the app collect or share user data?</td><td>Only optional,
+      user-enabled anonymous app-interaction analytics (Firebase Analytics);
+      no personal data; nothing shared with third parties for their own
+      purposes</td></tr>
+    <tr><td>Is data collection optional?</td><td>Yes — off by default,
+      opt-in, revocable in Settings</td></tr>
+    <tr><td>Data encrypted in transit?</td><td>Yes (when analytics are
+      enabled)</td></tr>
+    <tr><td>Can users request data deletion?</td><td>Turning analytics off
+      stops collection; uninstalling removes local saves. For analytics-data
+      deletion requests, contact the developer via the Play listing</td></tr>
+  </table>
+
+  <h2>Changes &amp; contact</h2>
+  <p>If a future version ever changes any of the above (for example, optional
+  cloud save), this policy will be updated first and the change called out in
+  the release notes.</p>
+  <p>Questions: contact the developer via the Google Play listing for
+  Emberdelve.</p>
+
+  <footer>© Tsoro Studios. This page is served from the Emberdelve repository
+  (<code>docs/store/privacy-policy.html</code>).</footer>
+</main>
+</body>
+</html>
