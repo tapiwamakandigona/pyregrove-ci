@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and lower (fullBackupContent). Same policy as
+     data_extraction_rules.xml: keep saves, drop cache. -->
+<full-backup-content>
+    <exclude domain="file" path="cache/" />
+</full-backup-content>
