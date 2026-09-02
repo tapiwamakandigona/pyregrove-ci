@@ -1,0 +1,572 @@
+# DEMAND — Pyregrove (`main`, the v2 action-platformer; formerly Emberwood)
+
+What "good" means for every Gauntlet session on this branch. Edited only when
+standards genuinely change. Never contains diagnosis of the current build —
+that lives in progress.md.
+
+## Owner directive 2026-09-02b — Pyregrove scoping: read this before 2026-09-02a and 2026-09-01g
+
+The two directives directly below (2026-09-02a and 2026-09-01g) were written
+for Emberdelve and mirrored here by mistake. Everything in them about
+v0.179.0, delvers, the Ember Forge, 38 installs and USD 4.25 is about the
+other game. Do not act on those specifics here, and do not write Emberdelve
+research into this repo.
+
+For Pyregrove the standing order is **2026-09-01 — one major update, ONE
+GitHub prerelease, then research**, with these clarifications:
+
+1. The "one major update" is what is already merged on `main` since
+   alpha.20: the jump retune per 2026-09-01d (`docs/JUMP-PHYSICS.md`,
+   `ec994eb`, gap-budget fix `daf8276`), the dormant boss intro, R8/backup
+   rules, the Skia manifest opt-out. That is the update. Do not start new
+   features.
+2. Cut it as **one** prerelease `v1.0.0-alpha.22` — GitHub only, APK + AAB,
+   sha256 of each in the body, androguard check against the pin
+   `286c4760…cee8ffd`, then re-download one asset unauthenticated and
+   confirm the hash. A release exists when the tag exists and the asset
+   re-downloads; "built via CI" is not a release. If you cannot finish in one
+   sitting, write exactly that in `progress.md`.
+3. Then research, Pyregrove-scoped, in `docs/research/` with primary-source
+   citations: (a) what a 2D action-platformer needs to pass Play's 2027
+   quality bar before its first listing; (b) how 3–5 comparable premium
+   mobile platformers structure their first 10 minutes and their difficulty
+   curve (cite the games and where the observation comes from); (c) a
+   one-page honest assessment of whether Pyregrove is a Play release or a
+   free itch.io title — the owner decides, you argue both sides.
+
+Your last commit here was 2026-09-01 18:12Z. If you are running, acknowledge
+this directive in `progress.md` with a timestamp before anything else.
+
+Unchanged: no ads, no analytics, no telemetry, no phone-home, no dark
+patterns; no store-listing edits; mirror-to-`pyregrove-ci` rule stands.
+## Owner directive 2026-09-02a — v0.179.0 is published. Do not cut another release. Research starts now.
+
+You did the build and stopped one step short: `pubspec` was bumped, the news
+panel landed, CI's `workflow_dispatch` produced the signed artefacts on
+`c4b1655` — and then no tag and no release for eight hours. The owner side
+finished the loop from **your** CI artefacts, so this is the same build:
+
+- **https://github.com/tapiwamakandigona/emberdelve/releases/tag/v0.179.0**
+  — full release, `/releases/latest` resolves to it, tag on `c4b1655`.
+- Five assets: universal APK, three ABI splits, and the AAB. sha256 of each
+  in the body. AAB `d47fa1d1e87b281888ddeb1d2af5670ee14401c459602b63f5093bc085592eef`,
+  re-downloaded unauthenticated and hash-matched.
+- All four APKs independently verified against the permanent upload key
+  (`031acb42…`). Notes lead with the roster, 16 → 22, in plain language.
+
+**So: do NOT tag or publish anything else. There is no v0.179.1, no
+re-cut, no "fixed" release.** If you believe something in that build is
+wrong, write it down in `progress.md` and stop — the owner decides.
+
+**A note on the process failure, so it does not repeat:** "release cut via CI
+workflow_dispatch" in `progress.md` described a build, not a release. A
+release exists when the tag exists and the assets are downloadable, and the
+last step of cutting one is fetching it back unauthenticated and checking
+the hash. If you cannot finish a release in one sitting, say so in
+`progress.md` in those words.
+
+**Now the research phase, exactly as directive 2026-09-01g ordered it.**
+Feature work is frozen. In order:
+
+1. Why do 38 installs produce 2 ratings and USD 4.25 lifetime?
+2. Where does the funnel leak — install → first delve → second session →
+   Ember Forge unlock — reasoned from the build and the listing, not
+   instrumented.
+3. What do comparable offline premium roguelites do at 20–50 installs that
+   we do not?
+
+Findings go in `docs/research/` as markdown with primary-source citations.
+A claim without a source is a guess.
+
+Unchanged: no ads, no analytics, no telemetry, no phone-home, no dark
+patterns; public `docs/` is published surface and the privacy policy URL
+must not move.
+
+## Owner directive 2026-09-01g — cut the release now, then stop building and go research
+
+**The condition the owner set has been met.** The instruction was: one more major
+update, then cut it as a single GitHub release, then move to research. Verified
+against the repo a few minutes ago:
+
+- `legacy/dice-builder` is **45 commits ahead of `v0.178.0`** with **CI green on
+  HEAD** (`4619f6a`, both `CI` and `ios` jobs successful).
+- The roster has gone from **16 delvers to 21** — THE HEDGER, THE MILLER, THE
+  BREWSTER and on through THE FARRIER — each shipping a sprite, a PROVENANCE row,
+  codex text, achievements, a proving, a hearth tale and a dedicated test.
+- `pubspec.yaml` still reads `0.178.0+204`, so none of it has been released.
+
+That is the major update. **Cut it.** Do not add a twenty-second delver first.
+
+**How to cut it — one release, not a chain of small ones:**
+
+1. Bump `pubspec.yaml` to **`0.179.0+205`**.
+2. Tag and cut **exactly one** GitHub release, `v0.179.0`, from
+   `legacy/dice-builder`. Mark it a full release, not a prerelease.
+3. Attach the full asset set, matching v0.178.0: universal APK, the three ABI
+   splits (`arm64-v8a`, `armeabi-v7a`, `x86_64`), and the **AAB**. The AAB is not
+   optional — it is the only artefact the Play track can accept, and its absence
+   is what would block the owner's ship decision.
+4. Put the **sha256 of every asset in the release body**, as v0.178.0 did. It is
+   how the build gets verified independently before it ever reaches a store.
+5. Release notes lead with the roster: **five new delvers, 16 to 21**. A player
+   asked "add more delvers, I need more" — the notes should visibly answer that
+   person in plain language, not in changelog shorthand.
+6. **GitHub only.** No Play submission, no store-listing edit. The owner makes
+   that call, not us.
+
+**Then stop shipping features and research.** Specifically, and in this order:
+
+- **Why do 38 installs produce 2 ratings and 4.25 USD of lifetime revenue?** That
+  ratio is the whole business problem. Everything else is downstream of it.
+- **Where does the funnel actually leak** — install to first delve, first delve to
+  second session, second session to the Ember Forge unlock? Instrument nothing to
+  find out; reason from the build and the store listing, because the promise of
+  "zero ads, played offline" means we do not get to watch people.
+- **What do comparable offline premium roguelites do at the 20-to-50-install
+  stage** that we are not doing? Store assets, screenshot order, the first sixty
+  seconds of play, the unlock's placement and price.
+- Write findings into `docs/research/` as primary-source-cited markdown. A claim
+  without a source is a guess, and guesses have already cost us time here.
+
+**Unchanged and non-negotiable:** no ads, no analytics, no telemetry, no
+phone-home, no dark patterns. Public `docs/` is published surface — the privacy
+policy URL is load-bearing and must not move, be renamed, or be rescoped.
+
+**The lesson in the sequencing:** content that sits unreleased on a branch helps
+nobody. Twenty-one delvers on `legacy/dice-builder` and five in players' hands is
+not a content problem, it is a shipping problem. Finish the loop before starting
+another one.
+
+## Owner directive 2026-09-01f — the players have voted, and they voted for content
+
+**This is not my opinion. This is primary-source player evidence**, and it is the
+first we have ever had. Three separate people have now said something about
+Emberdelve unprompted. Not one of them mentioned a bug, the difficulty curve, the
+price, or the UI.
+
+1. **Five-star review, 31 Aug 2026, 16:48 GMT**, reported by Play Console email:
+   > Add more delvers, I need more... give mee moreee. Good game tho
+
+   **Correction, same day:** an earlier version of this directive called that a
+   *public* review. It is not on the public listing. The console's Reviews page
+   reads "Your app doesn't have any reviews", ratings-with-reviews **0**, users
+   **2**, over all time. The email is real; the placement claim was mine and it
+   was wrong. It is either tester-track feedback or a review the author removed.
+   The evidence for what to build is unchanged — the sentence was still typed by
+   a player — but do not repeat the "first public review" framing anywhere.
+2. **Beta feedback, 31 Aug** (private channel, paraphrased): if we keep updating
+   the game, they will keep playing it.
+3. **Beta feedback, 31 Aug** (private channel, paraphrased): fun, both
+   challenging and rewarding, a good way to pass time.
+
+**What this changes.** The owner has asked for one more major update before a
+GitHub release is cut. This is what that update should be about. Two of three
+players asked for **content volume and continued updates**; zero asked for new
+systems. So:
+
+- **Prioritise more delvers** — playable characters/classes and the content that
+  makes them feel distinct — over any new mechanic, meta-layer, or refactor.
+- A player who says *"I need more"* is telling you the content runs out before
+  their interest does. That is the single best problem an indie game can have and
+  it has a deadline: it expires when they uninstall.
+- Pair it with a reason to come back across days rather than in one sitting. The
+  retention hook already specced (seven distinct local played days lighting
+  hearths, seventh settling 60 spendable embers) is the right shape: it rewards
+  returning, it needs no server, and it cannot be gamed by clock-skew because it
+  counts distinct local days, not elapsed time.
+
+**Constraints that still hold, and they are not negotiable:**
+
+- **Do not trade the promise for the metric.** No ads, no analytics, no
+  telemetry, no phone-home, no dark patterns, no timers that punish absence. The
+  listing promises "zero ads, played offline" and that promise is the product.
+  A retention feature that spies on people is a broken retention feature.
+- Content must ship **complete**. A half-finished delver is worse than no new
+  delver: the five-star reviewer asked for more, not for more placeholders.
+- Freeze otherwise unchanged: build on branch, no tag, no release, no Play
+  submission until the owner says so.
+
+**Wider lesson worth internalising:** we spent weeks reasoning about what players
+would want from an empty review page. The moment a real player typed one
+sentence, it outranked all of it. When you are choosing what to build next and
+there is a primary source, the primary source wins — and if there is no primary
+source, the highest-value work is often the work that produces one.
+
+## Owner directive 2026-09-01e — do not narrow the hosted privacy policy
+
+**Constraint, not a preference.** `docs/store/privacy-policy.html` in the public
+`emberdelve` repo is served by GitHub Pages at
+
+    https://tapiwamakandigona.github.io/emberdelve/store/privacy-policy.html
+
+and that exact URL is the **Privacy Policy field on the live Google Play listing
+for `com.tsorostudios.emberdelve`** — the shipped dice roguelite that has real
+installs and real revenue. Pages serves it from `main:/docs`, so an edit on
+`main` changes what Play links to, for a product that is not on `main`.
+
+**What went wrong.** Commit `9abefd4` (2026-08-31) rebranded that page to
+Pyregrove. Its message says "covers both packages", meaning pyregrove and
+emberwood. There is a third package — `com.tsorostudios.emberdelve` — whose live
+store listing points at this URL. For about a day, anyone tapping "Privacy
+Policy" on the Emberdelve listing was shown a policy for a different app that
+never named theirs. That is a policy-compliance exposure on the only app earning
+money, and store enforcement is not a thing we can appeal quickly.
+
+Fixed in the commit that carries this directive: the page is now
+"Tsoro Studios Games — Privacy Policy" and covers all three packages. No data
+practice, permission or data-safety answer was changed — only scope and naming.
+
+**Rules from here:**
+
+1. **Never scope that page to one game.** It must continue to name
+   `com.tsorostudios.emberdelve`, `com.tsorostudios.pyregrove` and
+   `com.tsorostudios.emberwood` for as long as any of them is published.
+2. **Never move or rename it.** The URL is referenced from a store listing that
+   only the owner can edit. A 404 there is worse than a stale page.
+3. If a game's data practices genuinely diverge, **add a per-app section** — do
+   not fork the page to a new address.
+4. Treat any file under `docs/` in the public repo as **published surface**, not
+   internal docs. Check what links to it before rewriting it.
+
+**Wider lesson worth generalising:** this repo now hosts more than one product's
+lineage. Before rebranding anything, grep for who else depends on the artefact —
+package ids, store listings, deep links, asset URLs. A rename that is correct
+inside one project can silently break a published contract in another.
+
+Freeze otherwise unchanged: keep working on code, no release, no tag, no Play
+submission.
+
+## Owner directive 2026-09-01d — JUMP FEEL: easier and better balanced (research first)
+
+Direct from the owner: *"make the jumping a little easier and balanced, it should
+research how normal game devs do it and the physics."*
+
+**This narrowly lifts the freeze for this one change.** Jump tuning is authorised
+to land on `main`. Nothing else is: still no release, no tag, no Play. This also
+partly answers the earlier warning about polish backlogs — the jump slice of
+`docs/FEEL-POLISH-BACKLOG.md` is now live work. The rest of that backlog is not.
+
+### Start from this: you already implemented the standard toolkit
+
+Before researching "how normal devs do it", know what you have, because it is
+most of the canonical list already:
+
+- coyote time (`kCoyoteTime`), jump buffering (`kJumpBufferTime`)
+- variable jump height with an early-release cut (`kJumpCutMultiplier`) **and** a
+  minimum-hold floor (`kMinJumpHold`) so tap-jumps still clear a tile
+- asymmetric gravity (`kFallGravityMultiplier` 1.6) and an apex-hang window
+  (`kApexGravityMultiplier`, `kApexHangSpeed`)
+- ceiling corner correction (`kCeilingCornerNudge`), one-way platforms with
+  drop-through, air jumps, substepped collision that cannot tunnel
+
+So **this is a tuning problem, not a missing-technique problem.** Do not "add
+coyote time" — it is there. The research should be about *values*, and about the
+few forgiveness mechanisms genuinely absent.
+
+### Your jump, measured — start the doc with these and verify them in-engine
+
+Computed by integrating your own constants from `lib/game/tuning.dart` at 240 Hz
+(kGravity 1150, kJumpSpeed 292, fall x1.6, apex x0.55 inside |vy|<40, terminal
+420, kRunSpeed 118, kTileSize 16). **Reproduce these in a test before trusting
+them** — if the engine disagrees with the maths, that discrepancy is itself the
+finding:
+
+| | height | apex | airtime | horizontal range at full run |
+|---|---|---|---|---|
+| full ground jump | 37.0 px = **2.31 tiles** | 283 ms | 500 ms | 59 px = **3.69 tiles** |
+| tap jump (cut at 0.09 s) | 25.1 px = **1.57 tiles** | 192 ms | 375 ms | 44 px = 2.77 tiles |
+| air / double jump | 30.5 px = **1.91 tiles** | 263 ms | 458 ms | 54 px = 3.38 tiles |
+
+Other derived facts: run speed 118 px/s = 7.38 tiles/s, so **one tile takes
+136 ms**; coyote time of 0.10 s therefore buys only **0.74 tiles** of grace;
+fall acceleration is 1840 px/s² against a 1150 px/s² rise; terminal velocity is
+26 tiles/s.
+
+### The specific hypothesis to test first
+
+This is a **touch-controlled** game. Values that feel generous with a keyboard
+are tight on glass, because a touch player gets no tactile edge, no key travel,
+and eats display+touch latency on top. A 0.74-tile coyote window and a 0.12 s
+buffer are defensible on PC and plausibly too tight on a phone. That, not jump
+height, is my first suspect for "jumping is hard".
+
+Second suspect: the apex-hang window is narrow. `kApexHangSpeed` 40 px/s is
+2.5 tiles/s, so reduced gravity applies for only a few dozen milliseconds.
+Widening the window makes landing *on* a platform much easier **without changing
+jump height at all** — which is exactly the kind of change that makes a game
+kinder without making it easier to cheese. Consider it before touching
+`kJumpSpeed`.
+
+Third: check whether any horizontal forgiveness exists at all. There is ceiling
+corner correction, but I see nothing that helps a player who lands a pixel short
+of a ledge. That asymmetry is worth a look.
+
+### Research, with sources
+
+Find out what values shipped platformers actually use and cite them. Aim at
+mobile/touch specifically, not just PC classics. Useful directions: the GDC
+"Building a Better Jump" material on deriving gravity from desired jump height
+and time-to-apex; Celeste's published forgiveness values; Steve Swink's *Game
+Feel* on the difference between control and feel; and writeups of Mario/Sonic
+jump arcs where the numbers are documented.
+
+**And the best reference is already in your repo, unused for this purpose:**
+`docs/reference/apple-knight/feel-frames/jump_full.gif` and `double_jump.gif`.
+Apple Knight is a shipped, successful, touch-controlled platformer and you
+captured its frames. **Measure its jump in tiles and in milliseconds off those
+frames** and put the numbers next to ours in the table. That is primary evidence
+about the exact genre and control scheme we are in, and it costs nothing.
+
+Every number you propose must carry a source or be labelled as our own choice.
+No borrowed value without attribution, no invented value dressed as a standard.
+
+### "Balanced" is the hard half — this is the gate
+
+Easier must not mean trivial, and it must not silently invalidate the levels.
+You have just done a parsed-level audit, so use it:
+
+1. Extract, from every level, the **hardest jump actually required** — longest
+   gap, highest ledge, tightest ceiling clearance.
+2. Check the current arc against those. Any jump that requires more than ~90% of
+   maximum range is a precision demand; find out how many there are.
+3. Re-check after tuning. The new arc must clear every required jump with margin,
+   and must **not** let the player skip intended routes, shortcut a gated area,
+   or trivialise a platforming set-piece. Call out anything that becomes
+   reachable that was not before — that is a level-design regression, not a bonus.
+4. If a level only works with the tight arc, say so plainly rather than quietly
+   letting the change break it.
+
+### Tests — characterise, do not fudge
+
+`test/physics_test.dart` exists. Add characterisation tests that assert the arc
+in **tiles and milliseconds**: full-jump height, tap-jump height, airtime,
+horizontal range, coyote and buffer windows. Then, when you change tuning, those
+tests should be **deliberately updated with the new expected values in the same
+commit** — so every future arc change is visible in a diff and can never drift
+silently. Never loosen an assertion to make a run pass.
+
+### Deliverable
+
+1. `docs/JUMP-PHYSICS.md`: the measured before-table, the researched reference
+   values with citations, the Apple Knight measurements, the hypothesis you
+   chose, the changed constants with a reason each, and the after-table.
+2. The tuning change on `main`, with tests.
+3. The level-margin check from above, written down.
+4. In `progress.md`, one honest line on what you could not verify without a
+   device in a human's hands. On-device feel is the one thing neither of us can
+   test from here — flag it for the owner rather than asserting it feels good.
+
+No new tracking or telemetry to measure any of this. No release.
+
+## Primary-source drop 2026-09-01c — Play's two new quality requirements
+
+Relayed from the owner's mailbox into `docs/research/owner-inbox-evidence.md`:
+Google Play has announced **two new app quality requirements** (memory/bitmap/
+code-optimization thresholds with separate criteria for games, and a device-
+migration onboarding standard). Verbatim text and provenance are in that file.
+
+Read it before touching `docs/PLAY-QUALITY-2027.md`. Two cautions: the email
+carries **no dates and no numbers**, so anything numeric must be sourced or
+marked `unknown`; and these are **memory** limits, not download size — download
+size is settled at 20.6 MB and stays closed. This lifts no freeze.
+
+## Owner directive 2026-09-01b — research steering, freeze unchanged
+
+### Compliance acknowledged
+
+Exactly one prerelease was cut (`v1.0.0-alpha.21`, 11:34:59Z) and then shipping
+stopped and research began. That is precisely what directive 4 asked for. The
+three-alphas-in-an-hour pattern did not return. Good.
+
+### One warning: a backlog is not research
+
+Since the prerelease, `docs/research/` has gained a feel/animation polish
+backlog, an audio polish backlog, and a level-craft backlog — one of them marked
+"freeze-lift ready". Read that pattern honestly: those are **work orders for
+feature work, written during a freeze**. That is how a freeze gets circumvented
+without anyone deciding to circumvent it, and it is the same drift that produced
+177 releases.
+
+Research answers a question that could change a decision. A backlog assumes the
+decision and queues the labour. From here, prefer artifacts that could talk us
+*out* of something.
+
+### The question that actually matters
+
+The launch-worthiness case is the right deliverable. Sharpen it:
+
+1. **State the verdict in the first line**, then argue it. Not a checklist that
+   leaves the reader to total it up.
+2. **Keep the case against launching** and make it the stronger half. Emberdelve
+   is the evidence: a good build, verified signing, 1136 tests, and 38 installs
+   with USD 4.25 lifetime. Shipping quality did not produce a business. Any
+   pyregrove launch plan that does not explain why its outcome differs is a plan
+   to repeat that result.
+3. **Name the flip conditions concretely** — what specifically must be true
+   before launch is worth the effort, phrased so we could check it off. "Polish"
+   is not a flip condition. "This channel produced N installs for a comparable
+   title" is.
+
+Same rule as emberdelve: if a question can only be answered by adding tracking
+to the app, write down that it is unanswerable rather than adding the tracking.
+
+### Freeze: unchanged
+
+- No further releases or prereleases without a new directive.
+- Not going on Play. `com.tsorostudios.pyregrove` needs Android developer
+  registration **only if and when it is actually distributed** — note it, do not
+  action it.
+- Firebase stays settled. Do not regenerate `google-services.json`.
+
+## Owner directive 2026-09-01 — one major update, ONE GitHub prerelease, then research
+
+Same instruction as emberdelve, scaled to where pyregrove actually is.
+
+- **AUTHORISED: exactly ONE GitHub prerelease** after the next major update.
+  Tag `v1.0.0-alpha.21`. Not a series — one. The last three alphas (18, 19, 20)
+  landed inside a single hour on 2026-08-31; that pattern does not return.
+- **STILL FROZEN: Google Play.** `com.tsorostudios.pyregrove` is not on Play and
+  is not going on Play without an owner call.
+- Keep syncing config changes into `pyregrove-ci`. Firebase is settled: the app
+  is registered as `1:598659800964:android:10bf75455070410d1047d1` in project
+  `gen-lang-client-0980262477`. **Do not regenerate `google-services.json`.**
+
+### Scope
+
+One cohesive update, chosen and justified in writing before you build it. Then
+tag, then stop.
+
+### Then research
+
+After the prerelease, no new features. Produce written artifacts in `docs/`:
+
+1. **Sharpen `docs/PLAY-QUALITY-2027.md` into a checklist with evidence.** Every
+   line should be either verified-met, verified-unmet, or explicitly unknown —
+   no line should be an assumption wearing a checkmark.
+2. **What does pyregrove have to be, to be worth a launch?** Emberdelve is the
+   honest cautionary tale here: 38 installs, 2 ratings, USD 4.25 lifetime. A
+   good build is not a business. Research what actually drives discovery in this
+   category and write the case for or against launching at all — including the
+   case against. A well-argued "not yet, and here is what would change that" is
+   a more useful deliverable than a launch plan nobody can execute.
+3. **Registration reminder, not urgent:** Android developer verification is
+   satisfied for everything currently shipping (emberdelve is registered with 3
+   keys). pyregrove needs registering **only if and when it is distributed** —
+   on Play or anywhere off-Play. Note it in the launch checklist; do not action
+   it now.
+
+## Owner directive 2026-08-31 — RELEASE FREEZE (read this first)
+
+**Stop cutting public releases.** No new git tags, no GitHub releases, no Play
+Store submissions, no store-listing edits. This supersedes the earlier
+"one improvement per release, version bump per release" rule, which is what
+produced the churn described below.
+
+The freeze is on **publishing**, not on work. Keep building, keep merging, keep
+the suite green. Accumulate changes.
+
+Why: this repo cut 177 releases, several within minutes of each other, and
+release notes were being published before binaries were attached. The "Direct
+APK" button on tapiwa.me/emberdelve points at `/releases/latest`, so during
+those gaps visitors landed on a release with nothing to download. Verified
+2026-08-31: `v0.176.0` (19:31:39Z) and `v0.177.0` (19:44:55Z) were both
+published with **zero assets**, and v0.176.0 was superseded 13 minutes later.
+
+The next public release will be a **single consolidated release**, cut by the
+owner together with his operations agent, published to GitHub and Google Play
+together. When that happens the existing standards still apply: tag at the
+release sha, signed APK+AAB from CI (`workflow_dispatch` on the ship branch),
+sha256s in the notes, plain player-facing notes plus a short technical section,
+and the signer cert must match the pin already recorded in this file.
+
+If you believe something genuinely must ship immediately — a crash, data loss,
+or a security issue — **do not cut the release yourself.** Write it at the top
+of `progress.md`, state the severity and the evidence, and stop.
+
+## Where to spend effort during the freeze (owner-set, 2026-08-31)
+
+Ranked. Do these instead of releasing.
+
+1. **Per-device download size.** Product pillar 3 requires < 30 MB. The current
+   split APKs measure 33-37 MB, so the branch is out of compliance with its own
+   standard. Measure per-ABI, find what is actually large, and reduce it.
+2. **Google Play quality requirements, enforced February 2027.** Google now
+   requires DEX optimization of at least 25% coverage across optimization,
+   shrinking and obfuscation via R8, plus thresholds on memory (anonymous RSS
+   + swap) and bitmap memory, plus a secure device-migration standard.
+   - Emberdelve already sets `isMinifyEnabled` and `isShrinkResources` (commit
+     `8f756dd8`).
+   - **Pyregrove sets neither, so R8 is off and it fails the DEX item.** Fix it,
+     but do not flip the flag blind: reflection-heavy plugins break *only* in
+     minified release builds. Copy the keep rules from emberdelve's
+     `android/app/proguard-rules.pro`, then build a release APK and launch it.
+   - Neither app declares `allowBackup`, `dataExtractionRules` or
+     `fullBackupContent`. Full detail and exact patches:
+     `docs/PLAY-QUALITY-2027.md` in the pyregrove repo.
+   - **Do not change what is included in backup for paid-entitlement state
+     without the owner's sign-off** — it decides whether a purchase survives a
+     phone upgrade, so it is a monetization decision, not a technical one.
+3. **Do not regenerate `android/app/google-services.json`.** It was corrected on
+   2026-08-31; before that, both client blocks carried the wrong app id and
+   analytics were attributed to the wrong app. Any Android config change must
+   land in **both** `pyregrove` and the public CI mirror `pyregrove-ci` — a fix
+   in one alone does nothing.
+4. **Do not regress the in-app review charter.** One ask ever, stamped on
+   request, sticky across cloud merge, never during the tour, no incentives, no
+   pre-filtering by sentiment, official API only.
+5. Keep the full test suite green and `flutter analyze` clean. No skipped tests.
+
+## Product pillars
+
+1. **Tighter, fairer Apple Knight.** Run / double-jump / dash, 3-hit melee,
+   apple throw, coins/feathers/chests/secrets, 3-medal mastery loop, meta
+   shop. Better game-feel than AK (coyote time, buffers, hit-pause), none of
+   its dark patterns. Banned forever: energy timers, decaying streaks,
+   FOMO-expiring content, loss-framed notifications, pay-to-win,
+   interstitial ads.
+2. **Headless-testable engine.** `lib/game/` logic (level parsing, physics
+   resolution, economy, saves) has zero rendering dependencies and is covered
+   by `flutter test`. Determinism where it matters via seeded RNG. Tuning
+   constants live in `lib/game/tuning.dart`, never inlined.
+3. **Performance before spectacle.** 60 fps in `--release` on a 2 GB Android;
+   zero allocations in `update()` hot paths; pooled projectiles/particles;
+   APK ≤ 60 MB. Perf claims are measured (bench harness / traces), not felt.
+4. **Honest presentation.** A stranger looking at any screen for 3 seconds
+   should never call it fake, empty, or confusing. Store copy, HUD counters,
+   and results screens state facts.
+5. **Original assets only.** CC0/CC-BY with in-app attribution
+   (PROVENANCE.md + CREDITS.md); nothing that forbids redistribution; no
+   traced/ripped art.
+
+## Release standards
+
+- Ship improvements as GitHub prereleases cut from `main`: version bump per
+  release (`1.0.0-alpha.N+code`, patch cadence one improvement at a time),
+  tag at the release sha, signed APK+AAB from CI (workflow_dispatch), sha256s
+  in the notes, player-facing notes + short technical section.
+- Package id `com.tsorostudios.pyregrove`. NOT on any Play track yet; going
+  to Play is an owner call (P-M10). Never submit to Play without an explicit
+  owner instruction.
+- Signer: the committed upload keystore (`android/signing/`); CI pin
+  `EXPECTED_CERT_SHA256`
+  (286c4760f1801269550fe40658e6255c96107713690d0e4353cbe76bccee8ffd) never
+  changes. Never regenerate keys. (Old Emberwood alphas .8–.16 used
+  031acb42…d44b7a0d — history only, see docs/release.md.)
+- If GitHub auth is down, keep the train moving locally: gates green, version
+  bumped, notes written, progress.md entry appended, commit made — tag/CI/
+  release published as soon as auth returns.
+
+## Quality gates (all VERIFIED, evidence in progress.md)
+
+- `flutter analyze` clean; full test suite green; no skipped tests.
+- New behavior has tests; a bug fix has a regression test that fails on the
+  old code.
+- Gameplay/UI changes: web-harness look pass (build `lib/main_webtest.dart`,
+  landscape-phone ~915×412 AND desktop viewports, spawn + mid-level shots,
+  close and wide) — actually LOOK at the shots and log what a stranger would
+  flag. Overflow sweep for Flutter UI screens at small phone + 1.3× text.
+- Physics/feel changes: telemetry-driven browser verification (assert on
+  `window.__pyregrove`, not pixels); reachability/jump-height contracts in
+  tests stay green.
+- progress.md is append-only and written as you go; open issues carry
+  forward verbatim until actually fixed.
