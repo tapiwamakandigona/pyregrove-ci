@@ -20,3 +20,8 @@ secondary routes reachable without scaled-down text.
 
 Use the existing public CI mirror only. Private signing material and histories
 are never copied here. No tag, release, Android signing, deployment or version bump.
+
+Baseline helper CI 33950045156 failed analyzer on one new-helper issue:
+`The import of 'dart:typed_data' is unnecessary because all of the used elements
+are also provided by the import of 'package:flutter/services.dart'.`
+Corrective retry removes only that redundant import. No assertion or old test changes.
