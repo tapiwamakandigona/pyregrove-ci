@@ -1,0 +1,1191 @@
+// game/ember_game.dart — the Flame shell around LevelSession. Owns the level
+// lifecycle, fixed-resolution camera (352x198) with look-ahead + peek-down,
+// parallax backdrop, touch HUD + keyboard input (one shared InputIntent),
+// sfx/fx event mapping, and results/fail persistence. ALL gameplay logic
+// lives in the headless session/cores — nothing here mutates game state
+// except through InputIntent.
+import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
+import 'package:flame/components.dart';
+import 'package:flame/events.dart';
+import 'package:flame/flame.dart';
+import 'package:flame/game.dart';
+import 'package:flame/input.dart';
+import 'package:flutter/gestures.dart'
+    show
+        Drag,
+        DragEndDetails,
+        DragStartDetails,
+        DragUpdateDetails,
+        ImmediateMultiDragGestureRecognizer,
+        TapDownDetails,
+        TapUpDetails;
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart'
+    show AppLifecycleState, EdgeInsets, KeyEventResult;
+
+import '../audio/audio_service.dart';
+import '../audio/music_mix.dart';
+import '../audio/settings.dart';
+import 'haptics.dart';
+import '../core/rng.dart';
+import '../meta/catalog.dart' show SpellEffect, WeaponSpecial;
+import '../meta/daily.dart';
+import '../meta/progress_state.dart';
+import '../ui/app_state.dart';
+import 'camera_frame.dart';
+import 'components/apple_arc_preview.dart';
+import 'components/ash_decal.dart';
+import 'components/decor_layer.dart';
+import 'components/enemy_component.dart';
+import 'components/fx.dart';
+import 'components/coin_fly.dart';
+import 'components/hud.dart';
+import 'components/items_component.dart';
+import 'components/parallax_bg.dart';
+import 'components/perf_overlay.dart';
+import 'components/player_component.dart';
+import 'components/sign_bubble.dart';
+import 'components/tile_layer.dart';
+import 'core_loadout.dart';
+import 'difficulty.dart';
+import 'input_intent.dart';
+import 'level/level_data.dart';
+import 'player/player_core.dart';
+import 'swing_weight.dart';
+import 'session.dart';
+import 'tuning.dart';
+
+// NOTE ON THE MIXINS (v1.0.0-alpha.3 touch-input fix, the REAL alpha.1 bug):
+// Flame's TapCallbacks/DragCallbacks components normally get their gesture
+// recognizers attached lazily — MultiTap/MultiDragDispatcher are only created
+// when the first such component MOUNTS, which for our HUD is after onLoad,
+// i.e. after the GameWidget has already built once. The widget-refresh that
+// is supposed to re-wrap the game in a RawGestureDetector after that never
+// lands in release builds (verified empirically in headless Chromium against
+// the compiled web build: pointer events reached Flutter's Listener but no
+// recognizer ever fired, so no HUD button ever received a tap — on device
+// the whole touch HUD was dead while keyboard input worked fine).
+//
+// The fix: EmberGame itself implements MultiTouchTapDetector +
+// MultiTouchDragDetector. Their `mount()` overrides register the gesture
+// recognizers via `initializeGestures`/`gestureDetectors` BEFORE the first
+// GameWidget build, so the RawGestureDetector is present from frame one. The
+// game-level handlers then forward every tap/drag into the stock Flame
+// dispatchers, preserving the normal component routing (componentsAtPoint →
+// HudHoldButton TapCallbacks/DragCallbacks) that all existing tests cover.
+/// Longest EmberGame.onLoad will hold the loading state for level component
+/// sprite decodes (alpha.23 #34). Generous against a 2 GB phone's cold
+/// decode of ~30 small PNGs; a stall past this renders with pop-in instead
+/// of blocking the level.
+const Duration kFirstFrameHoldMax = Duration(seconds: 6);
+
+class EmberGame extends FlameGame
+    with KeyboardEvents, MultiTouchTapDetector, MultiTouchDragDetector {
+  // AKP-1a (docs/ak-parity-plan.md): 352x198 — owner-confirmed 2026-07-25:
+  // exact Apple Knight character-size match. Same 16:9; the 24px player
+  // reads 24/198 ≈ 12.1% of screen height (AK measured ≈12.5%). Was 384x216
+  // (11.1%), originally 480x270. No sprite or physics constant changes.
+  static const double viewWidth = 352;
+  static const double viewHeight = 198;
+
+  static const overlayPause = 'pause';
+  static const overlayResults = 'results';
+  static const overlayFail = 'fail';
+
+  final String levelId;
+  final int? seedOverride; // tests + Daily Delve (deterministic daily seed)
+  final bool daily; // Daily Delve run: wallet + daily best only, no records
+
+  EmberGame({
+    required this.levelId,
+    this.seedOverride,
+    this.daily = false,
+    double? hudScaleOverride,
+    bool? hudMirroredOverride,
+    double? hudLiftOverride,
+  }) : hudScale =
+           (hudScaleOverride ??
+                   AudioService.instance?.settings.controlScale ??
+                   1.0)
+               .clamp(
+                 AudioSettings.controlScaleMin,
+                 AudioSettings.controlScaleMax,
+               ),
+       hudMirrored =
+           hudMirroredOverride ??
+           AudioService.instance?.settings.mirrorControls ??
+           false,
+       hudLift =
+           (hudLiftOverride ??
+                   AudioService.instance?.settings.controlLift ??
+                   0.0)
+               .clamp(
+                 AudioSettings.controlLiftMin,
+                 AudioSettings.controlLiftMax,
+               ),
+       super(
+         camera: CameraComponent.withFixedResolution(
+           width: viewWidth,
+           height: viewHeight,
+         ),
+       ) {
+    // Pre-register the component-event dispatchers. If we left this to
+    // TapCallbacks/DragCallbacks (which add them when the first HUD button
+    // mounts), their gesture recognizers would be registered after the
+    // GameWidget's first build and never attach in release builds — the
+    // whole touch HUD stays deaf (see class note above).
+    // registerKey is what TapCallbacks/DragCallbacks.onMount would call for
+    // their lazily-created dispatchers; using it here keeps them from ever
+    // creating duplicates.
+    // ignore: invalid_use_of_internal_member
+    registerKey(const MultiTapDispatcherKey(), _tapDispatcher);
+    add(_tapDispatcher);
+    // ignore: invalid_use_of_internal_member
+    registerKey(const MultiDragDispatcherKey(), _dragDispatcher);
+    add(_dragDispatcher);
+    // Touching gestureDetectors here runs initializeGestures(this), wiring
+    // the tap recognizer to our MultiTapListener API before the first build.
+    // The drag recognizer has no game-level branch there, so add it directly.
+    gestureDetectors.add<ImmediateMultiDragGestureRecognizer>(
+      ImmediateMultiDragGestureRecognizer.new,
+      (ImmediateMultiDragGestureRecognizer instance) {
+        instance.onStart = (Offset point) => _GameDragAdapter(this, point);
+      },
+    );
+  }
+
+  final MultiTapDispatcher _tapDispatcher = MultiTapDispatcher();
+  final MultiDragDispatcher _dragDispatcher = MultiDragDispatcher();
+
+  // -- game-level gesture API → component dispatchers -------------------------
+  // Forward every tap/drag into the stock Flame dispatchers, preserving the
+  // normal componentsAtPoint routing to TapCallbacks/DragCallbacks components.
+  @override
+  void handleTapDown(int pointerId, TapDownDetails details) =>
+      _tapDispatcher.onTapDown(TapDownEvent(pointerId, this, details));
+
+  @override
+  void handleTapUp(int pointerId, TapUpDetails details) =>
+      _tapDispatcher.onTapUp(TapUpEvent(pointerId, this, details));
+
+  @override
+  void handleTapCancel(int pointerId) =>
+      _tapDispatcher.onTapCancel(TapCancelEvent(pointerId));
+
+  @override
+  void handleLongTapDown(int pointerId, TapDownDetails details) =>
+      _tapDispatcher.onLongTapDown(TapDownEvent(pointerId, this, details));
+
+  @override
+  void handleDragStart(int pointerId, DragStartDetails details) =>
+      _dragDispatcher.onDragStart(DragStartEvent(pointerId, this, details));
+
+  @override
+  void handleDragUpdate(int pointerId, DragUpdateDetails details) =>
+      _dragDispatcher.onDragUpdate(DragUpdateEvent(pointerId, this, details));
+
+  @override
+  void handleDragEnd(int pointerId, DragEndDetails details) =>
+      _dragDispatcher.onDragEnd(DragEndEvent(pointerId, details));
+
+  @override
+  void handleDragCancel(int pointerId) =>
+      _dragDispatcher.onDragCancel(DragCancelEvent(pointerId));
+
+  late LevelSession session;
+
+  /// True once onLoad has built [session]. Flame's isLoaded can't stand in
+  /// for this: headless tests drive onLoad() by hand, which never completes
+  /// the engine's internal load future. Guards the pre-load entry points
+  /// (back gesture, lifecycle backgrounding) against the late `session`.
+  bool sessionReady = false;
+  final InputIntent _intent = InputIntent();
+
+  // Touch state (buttons set these; merged with keyboard each frame).
+  bool touchLeft = false;
+  bool touchRight = false;
+  bool touchDown = false;
+  bool _touchJumpHeld = false;
+  bool _touchJumpEdge = false;
+  bool _touchAttackEdge = false;
+  bool _touchThrowEdge = false;
+  bool _touchThrowHeld = false; // AKP-4c: arc preview while held
+  bool _touchSpellEdge = false;
+  bool _keySpellEdge = false;
+  bool _touchRollEdge = false;
+
+  final Set<LogicalKeyboardKey> _keys = {};
+  bool _keyJumpEdge = false;
+  bool _keyAttackEdge = false;
+  bool _keyThrowEdge = false;
+  bool _keyRollEdge = false;
+
+  late SpriteAnimation _deathAnim;
+  final _ashDecals = AshDecals();
+  double _camBump = 0;
+  late PlayerComponent _playerComponent;
+  double _stepClock = 0;
+  bool _stepAlt = false;
+  final math.Random _bumpRand = math.Random();
+  bool _resultsPersisted = false;
+
+  /// Labels of what this run's clear opened (set in [_persistResults]);
+  /// the results overlay shows them as UNLOCKED lines. Empty when nothing.
+  List<String> unlockNotice = const [];
+
+  Vector2 get cameraPos => camera.viewfinder.position;
+
+  /// World → viewport (HUD) coordinates for a point.
+  Vector2 worldToScreen(Vector2 w) {
+    final cam = camera.viewfinder.position;
+    return Vector2(w.x - cam.x + viewWidth / 2, w.y - cam.y + viewHeight / 2);
+  }
+
+  /// Coin pickup feedback (alpha.23): a small coin flies from the pickup to
+  /// the HUD counter, which pulses on arrival. Capped in CoinFlyFx.
+  void _launchCoinFlight(Vector2 at) {
+    final r = _readout;
+    if (r == null || !r.spritesReady) return;
+    CoinFlyFx.tryAdd(
+      camera.viewport,
+      CoinFlyFx(
+        start: worldToScreen(at),
+        target: r.coinIconCenter,
+        sprite: r.coinSprite,
+        onArrive: r.bumpCoin,
+      ),
+    );
+  }
+
+  /// The player's body in viewport (HUD) coordinates: the fixed-resolution
+  /// camera is anchored at its centre, so world → screen is a translation.
+  ui.Rect playerScreenRect() {
+    if (!sessionReady) return ui.Rect.zero;
+    final b = session.player.body;
+    final cam = camera.viewfinder.position;
+    return ui.Rect.fromLTWH(
+      b.x - cam.x + viewWidth / 2,
+      b.y - cam.y + viewHeight / 2,
+      b.w,
+      b.h,
+    );
+  }
+
+  @override
+  Future<void> onLoad() async {
+    final source = await Flame.bundle.loadString('assets/levels/$levelId.txt');
+    final level = LevelData.parse(source);
+    final loadout = AppState.isReady
+        ? Loadout.fromSave(AppState.save)
+        : Loadout.starter();
+    final seed = seedOverride ?? DateTime.now().millisecondsSinceEpoch % rngMod;
+    session = LevelSession(
+      level,
+      loadout,
+      seed: seed,
+      difficulty: AppState.isReady
+          ? difficultyFromId(AppState.save.difficulty)
+          : Difficulty.medium,
+    );
+    sessionReady = true;
+
+    camera.viewfinder.anchor = Anchor.center;
+    _camSmoothX = session.player.body.centerX;
+    _camSmoothY = session.player.body.centerY;
+    camera.viewfinder.position = Vector2(_camSmoothX, _camSmoothY);
+    // First-frame completeness (alpha.23 #34). Every level component decodes
+    // its sprites in its own onLoad. GameWidget drops the loading state the
+    // moment THIS onLoad returns, so without holding for the children the
+    // first frames rendered tiles-less, player-less and HUD-less until each
+    // decode landed (measured cold, w1_l1: 4/7 world + 10/10 HUD + parallax
+    // still unloaded at onLoad return — test/first_frame_complete_test.dart).
+    // add() hands back the child's load future once the game has a layout;
+    // headless probes without onGameResize get null, so collect defensively.
+    final pending = <Future<void>>[];
+    void hold(FutureOr<void> f) {
+      if (f is Future<void>) pending.add(f);
+    }
+
+    hold(camera.backdrop.add(ParallaxBackground()));
+
+    hold(world.add(DecorLayerComponent()));
+    hold(world.add(TileLayerComponent()));
+    hold(world.add(ItemsComponent()));
+    hold(world.add(_playerComponent = PlayerComponent()));
+    hold(world.add(AppleArcPreview())); // AKP-4c
+    hold(world.add(SignBubbleComponent()));
+    for (final core in session.enemies) {
+      hold(world.add(EnemyComponent(core)));
+    }
+
+    _deathAnim = SpriteAnimation.fromFrameData(
+      await images.load('fx/enemy_death.png'),
+      SpriteAnimationData.sequenced(
+        amount: 6,
+        stepTime: 0.07,
+        textureSize: Vector2(40, 41),
+        loop: false,
+      ),
+    );
+
+    hold(_buildHud());
+    // Fail-open: before this hold a failed or stalled sprite decode meant one
+    // missing sprite; it must not become a level that never leaves the
+    // loading screen. Errors are swallowed per component (they still surface
+    // through the crash guard's zone handler) and the hold is capped.
+    await Future.wait(
+      pending.map((f) => f.catchError((Object _) {})),
+    ).timeout(kFirstFrameHoldMax, onTimeout: () => const <void>[]);
+    AudioService.instance?.playMusic(session.level.music);
+  }
+
+  // AKP-5 (docs/ak-parity-plan.md §5): AK-style control layout.
+  // Bottom-left: left/right arrows + a down-chevron (peek/drop-through —
+  // finally wires touchDown, AKP-2c). Bottom-right: 4-button diamond —
+  // jump (biggest, bottom-right), sword (left of it), dash (top-left),
+  // apple (top-right, auto-hides). Pause >= 44 logical px (AKP-5b).
+  //
+  // Alignment pass (owner-reported, 2026-07-25): the small diamond buttons
+  // (dash, apple) are CENTERED on their column (sword / jump) instead of
+  // edge-aligned, and the whole HUD respects device safe areas — display
+  // cutouts (notch / punch-hole) and gesture- or 3-button-nav bars — pushed
+  // in from the hosting widget via [setSafeArea]. Geometry lives in
+  // [_layoutHud] so it can re-run on resize / inset changes.
+  static const hudBtnBase = 52.0; // arrows + sword
+  static const hudJumpBtnBase = 56.0; // jump reads biggest, AK-style
+  static const hudSmallBtnBase = 44.0; // dash / apple / down / pause (>= 48dp)
+  static const hudPad = 8.0;
+  static const hudGap = 6.0;
+
+  /// Control-size multiplier from Settings (AudioSettings.controlScale),
+  /// read once per level. Pause and the readout never scale.
+  final double hudScale;
+  double get hudBtn => hudBtnBase * hudScale;
+  double get hudJumpBtn => hudJumpBtnBase * hudScale;
+  double get hudSmallBtn => hudSmallBtnBase * hudScale;
+
+  /// Swap control sides (Settings, alpha.23): the move cluster and the
+  /// action diamond trade corners for left-handed play. Pause and the
+  /// readout never move. Read once per level, like [hudScale].
+  final bool hudMirrored;
+
+  /// Control height (Settings, alpha.23): both clusters rise this many view
+  /// px off the bottom edge, clamped so the tallest cluster button stays
+  /// below the readout / pause row. Read once per level, like [hudScale].
+  final double hudLift;
+
+  HudHoldButton? _btnLeft, _btnRight, _btnDown;
+  HudHoldButton? _btnDash, _btnSword, _btnJump, _btnPause;
+  HudThrowButton? _btnThrow;
+  HudSpellButton? _btnSpell;
+  HudReadout? _readout;
+
+  // Screen-space (logical px) safe-area padding from the hosting widget;
+  // converted to viewport units in [hudSafeInsets].
+  EdgeInsets _safePadding = EdgeInsets.zero;
+  Vector2 _canvas = Vector2(1280, 720);
+
+  /// Called by the hosting widget (GameScreen) whenever MediaQuery padding
+  /// changes: display cutout, status bar, gesture-nav / 3-button-nav bar.
+  void setSafeArea(EdgeInsets padding) {
+    if (padding == _safePadding) return;
+    _safePadding = padding;
+    _layoutHud();
+  }
+
+  /// Safe-area padding converted from screen logical px to viewport units.
+  /// The fixed-resolution viewport is scaled uniformly and letterboxed; any
+  /// part of an inset that falls inside the letterbox band costs nothing.
+  EdgeInsets get hudSafeInsets {
+    final scale = math.min(_canvas.x / viewWidth, _canvas.y / viewHeight);
+    if (scale <= 0) return EdgeInsets.zero;
+    final boxX = (_canvas.x - viewWidth * scale) / 2;
+    final boxY = (_canvas.y - viewHeight * scale) / 2;
+    double side(double inset, double box) => math.max(0, (inset - box) / scale);
+    return EdgeInsets.fromLTRB(
+      side(_safePadding.left, boxX),
+      side(_safePadding.top, boxY),
+      side(_safePadding.right, boxX),
+      side(_safePadding.bottom, boxY),
+    );
+  }
+
+  @override
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    _canvas = size.clone();
+    _layoutHud();
+  }
+
+  void _layoutHud() {
+    if (_btnLeft == null) return; // HUD not built yet
+    final ins = hudSafeInsets;
+    // Mirrored layout: lay the clusters out in the mirror image's inset frame
+    // (left/right insets swapped), then reflect every cluster button across
+    // the view's vertical axis. The arrows are swapped back afterwards so
+    // LEFT still sits left of RIGHT.
+    final clusterInsL = hudMirrored ? ins.right : ins.left;
+    final clusterInsR = hudMirrored ? ins.left : ins.right;
+    final left = hudPad + clusterInsL;
+    final right = viewWidth - hudPad - clusterInsR;
+    final top = hudPad + ins.top;
+    // Control height: lift both clusters, but the tallest cluster button
+    // (spell, capping the dash column) must stay inside the top safe pad.
+    final spellTopUnlifted =
+        viewHeight - hudPad - ins.bottom - hudBtn - (hudSmallBtn + hudGap) * 2;
+    final lift = clampedControlLift(hudLift, spellTopUnlifted - top);
+    final bottom = viewHeight - hudPad - ins.bottom - lift;
+
+    // Left cluster: arrows bottom-aligned, down-chevron beside them.
+    final bottomY = bottom - hudBtn;
+    _btnLeft!.position.setValues(left, bottomY);
+    _btnRight!.position.setValues(left + hudBtn + hudGap, bottomY);
+    _btnDown!.position.setValues(
+      left + (hudBtn + hudGap) * 2,
+      bottom - hudSmallBtn,
+    );
+
+    // Right diamond: jump biggest bottom-right, sword left of it; dash and
+    // apple centered above their columns (not edge-aligned — the alignment
+    // fix), so the diamond reads symmetric at any button-size mix.
+    final jumpX = right - hudJumpBtn;
+    final jumpY = bottom - hudJumpBtn;
+    final swordX = jumpX - hudBtn - hudGap;
+    final swordY = bottom - hudBtn;
+    _btnJump!.position.setValues(jumpX, jumpY);
+    _btnSword!.position.setValues(swordX, swordY);
+    _btnDash!.position.setValues(
+      swordX + (hudBtn - hudSmallBtn) / 2,
+      swordY - hudSmallBtn - hudGap,
+    );
+    _btnThrow!.position.setValues(
+      jumpX + (hudJumpBtn - hudSmallBtn) / 2,
+      jumpY - hudSmallBtn - hudGap,
+    );
+    // Spell (AKP-4d): caps the dash column, auto-hides without a charge.
+    _btnSpell!.position.setValues(
+      swordX + (hudBtn - hudSmallBtn) / 2,
+      swordY - (hudSmallBtn + hudGap) * 2,
+    );
+
+    if (hudMirrored) {
+      for (final b in <PositionComponent>[
+        _btnLeft!,
+        _btnRight!,
+        _btnDown!,
+        _btnJump!,
+        _btnSword!,
+        _btnDash!,
+        _btnThrow!,
+        _btnSpell!,
+      ]) {
+        b.position.x = viewWidth - b.position.x - b.size.x;
+      }
+      final lx = _btnLeft!.position.x;
+      _btnLeft!.position.x = _btnRight!.position.x;
+      _btnRight!.position.x = lx;
+    }
+
+    _btnPause!.position.setValues(
+      viewWidth - hudPad - ins.right - hudSmallBtnBase,
+      top,
+    );
+    _readout!.position.setValues(ins.left, ins.top);
+  }
+
+  Future<void> _buildHud() {
+    _btnLeft = HudHoldButton(
+      spritePath: 'hud/btn_left.png',
+      position: Vector2.zero(),
+      size: Vector2.all(hudBtn),
+      spawnFade: !hudMirrored, // the cluster on the left edge fades
+      onPressed: () => touchLeft = true,
+      onReleased: () => touchLeft = false,
+    );
+    _btnRight = HudHoldButton(
+      spritePath: 'hud/btn_right.png',
+      position: Vector2.zero(),
+      size: Vector2.all(hudBtn),
+      spawnFade: !hudMirrored, // the cluster on the left edge fades
+      onPressed: () => touchRight = true,
+      onReleased: () => touchRight = false,
+    );
+    // Down chevron (AKP-2c): camera peek-down + drop-through one-way
+    // platforms — previously keyboard-only on the touch build.
+    _btnDown = HudHoldButton(
+      spritePath: 'hud/btn_down.png',
+      position: Vector2.zero(),
+      size: Vector2.all(hudSmallBtn),
+      spawnFade: !hudMirrored, // the cluster on the left edge fades
+      onPressed: () => touchDown = true,
+      onReleased: () => touchDown = false,
+    );
+    // Throw (apple) button: diamond top-right, above jump; HudThrowButton
+    // hides itself whenever the pouch is empty.
+    _btnThrow = HudThrowButton(
+      position: Vector2.zero(),
+      size: Vector2.all(hudSmallBtn),
+      onPressed: () {
+        _touchThrowEdge = true;
+        _touchThrowHeld = true; // AKP-4c: keep held -> arc preview
+      },
+      onReleased: () => _touchThrowHeld = false,
+    );
+    // Dash/roll (AKP-2a): diamond top-left, above the sword.
+    // Spell cast (AKP-4d): one charge per run; hides itself otherwise.
+    _btnSpell = HudSpellButton(
+      position: Vector2.zero(),
+      size: Vector2.all(hudSmallBtn),
+      onPressed: () => _touchSpellEdge = true,
+    );
+    _btnDash = HudHoldButton(
+      spritePath: 'hud/btn_round.png',
+      iconPath: 'hud/icon_dash.png',
+      position: Vector2.zero(),
+      spawnFade: hudMirrored,
+      size: Vector2.all(hudSmallBtn),
+      onPressed: () => _touchRollEdge = true,
+      onReleased: () {},
+    );
+    _btnSword = HudHoldButton(
+      spritePath: 'hud/btn_round.png',
+      iconPath: 'hud/icon_sword.png',
+      position: Vector2.zero(),
+      spawnFade: hudMirrored,
+      size: Vector2.all(hudBtn),
+      onPressed: () => _touchAttackEdge = true,
+      onReleased: () {},
+    );
+    _btnJump = HudHoldButton(
+      spritePath: 'hud/btn_round.png',
+      iconPath: 'hud/icon_jump.png',
+      position: Vector2.zero(),
+      spawnFade: hudMirrored,
+      size: Vector2.all(hudJumpBtn),
+      onPressed: () {
+        _touchJumpEdge = true;
+        _touchJumpHeld = true;
+      },
+      onReleased: () => _touchJumpHeld = false,
+    );
+    _btnPause = HudHoldButton(
+      spritePath: 'hud/icon_pause.png',
+      position: Vector2.zero(),
+      size: Vector2.all(hudSmallBtnBase),
+      onPressed: pauseGame,
+      onReleased: () {},
+    );
+    _readout = HudReadout();
+    _layoutHud();
+    return camera.viewport.addAll([
+      _btnLeft!,
+      _btnRight!,
+      _btnDown!,
+      _btnThrow!,
+      _btnSpell!,
+      _btnDash!,
+      _btnSword!,
+      _btnJump!,
+      _btnPause!,
+      _readout!,
+      // Frame-time readout for device profiling; compiled out of normal
+      // builds (--dart-define=PERF_OVERLAY=true to enable — docs/perf.md §2).
+      if (const bool.fromEnvironment('PERF_OVERLAY'))
+        PerfOverlay()..position = Vector2(4, viewHeight - 14),
+    ]);
+  }
+
+  // -- input ------------------------------------------------------------------
+
+  @override
+  KeyEventResult onKeyEvent(
+    KeyEvent event,
+    Set<LogicalKeyboardKey> keysPressed,
+  ) {
+    _keys
+      ..clear()
+      ..addAll(keysPressed);
+    if (event is KeyDownEvent) {
+      final k = event.logicalKey;
+      if (k == LogicalKeyboardKey.space ||
+          k == LogicalKeyboardKey.keyW ||
+          k == LogicalKeyboardKey.arrowUp) {
+        _keyJumpEdge = true;
+      }
+      if (k == LogicalKeyboardKey.keyJ || k == LogicalKeyboardKey.keyX) {
+        _keyAttackEdge = true;
+      }
+      if (k == LogicalKeyboardKey.keyK || k == LogicalKeyboardKey.keyC) {
+        _keyThrowEdge = true;
+      }
+      // AKP-4d: spell cast on Q or M (session-level verb, one per run).
+      if (k == LogicalKeyboardKey.keyQ || k == LogicalKeyboardKey.keyM) {
+        _keySpellEdge = true;
+      }
+      // AKP-2a: dash/roll on Shift (the DOWN+JUMP chord still works too).
+      if (k == LogicalKeyboardKey.shiftLeft ||
+          k == LogicalKeyboardKey.shiftRight ||
+          k == LogicalKeyboardKey.keyL) {
+        _keyRollEdge = true;
+      }
+      if (k == LogicalKeyboardKey.escape) pauseGame();
+    }
+    return KeyEventResult.handled;
+  }
+
+  bool get _keyLeft =>
+      _keys.contains(LogicalKeyboardKey.arrowLeft) ||
+      _keys.contains(LogicalKeyboardKey.keyA);
+  bool get _keyRight =>
+      _keys.contains(LogicalKeyboardKey.arrowRight) ||
+      _keys.contains(LogicalKeyboardKey.keyD);
+  bool get _keyDown =>
+      _keys.contains(LogicalKeyboardKey.arrowDown) ||
+      _keys.contains(LogicalKeyboardKey.keyS);
+  bool get _keyJumpHeld =>
+      _keys.contains(LogicalKeyboardKey.space) ||
+      _keys.contains(LogicalKeyboardKey.keyW) ||
+      _keys.contains(LogicalKeyboardKey.arrowUp);
+  bool get _keyThrowHeld =>
+      _keys.contains(LogicalKeyboardKey.keyK) ||
+      _keys.contains(LogicalKeyboardKey.keyC);
+
+  /// AKP-4c: the arc preview draws only while the throw button is held with
+  /// apples in the pouch and the player alive — an empty pouch has nothing
+  /// to preview.
+  bool get throwPreviewActive =>
+      _intent.throwHeld && session.applesHeld > 0 && !session.player.isDead;
+
+  // -- frame ------------------------------------------------------------------
+
+  /// Always-on frame-time aggregate (a handful of float ops per frame).
+  /// PERF_OVERLAY draws its own copy on-screen; this one feeds the web-test
+  /// telemetry bridge so throttled browser runs can report honest numbers.
+  final frameStats = FrameStats();
+
+  /// Harness-only slow motion (lib/main_webtest.dart `?slowmo=`), so a
+  /// headless screenshot can land inside a 220 ms swing. Always 1.0 in the
+  /// shipped app: nothing in settings or save data writes it.
+  double timeScale = 1.0;
+
+  @override
+  void update(double dt) {
+    frameStats.add(dt);
+    final scaled = dt * timeScale;
+    super.update(scaled);
+    if (scaled <= 0) return;
+    // Low-end frames: simulate the REAL elapsed time in <=1/60 sub-steps
+    // instead of clamping to one 1/30 step — a 20fps device used to play the
+    // whole game at 0.66x speed (slow motion), now it plays at full speed
+    // with correct physics. Catch-up is capped at 4 sub-steps (full speed
+    // down to ~15fps; below that we degrade to slow-mo rather than spiral,
+    // since each extra sub-step costs more logic time on an already-slow
+    // device). Sub-steps also keep integration steps small, which is
+    // strictly safer against tunneling than the old single 1/30 step.
+    final clamped = math.min(scaled, 4 / 60);
+
+    _intent
+      ..dirX =
+          (touchRight || _keyRight ? 1.0 : 0.0) -
+          (touchLeft || _keyLeft ? 1.0 : 0.0)
+      ..down = touchDown || _keyDown
+      ..jumpHeld = _touchJumpHeld || _keyJumpHeld
+      ..jumpPressed = _touchJumpEdge || _keyJumpEdge
+      ..attackPressed = _touchAttackEdge || _keyAttackEdge
+      ..throwPressed = _touchThrowEdge || _keyThrowEdge
+      ..throwHeld = _touchThrowHeld || _keyThrowHeld
+      ..rollPressed = _touchRollEdge || _keyRollEdge;
+    _touchJumpEdge = _keyJumpEdge = false;
+    _touchAttackEdge = _keyAttackEdge = false;
+    _touchThrowEdge = _keyThrowEdge = false;
+    _touchRollEdge = _keyRollEdge = false;
+    // AKP-4d: the spell is a session verb (touch button + Q/M), not part of
+    // InputIntent — it never competes with movement buffering.
+    if (_touchSpellEdge || _keySpellEdge) session.castSpell();
+    _touchSpellEdge = _keySpellEdge = false;
+
+    session.cameraX = cameraPos.x;
+    var remaining = clamped;
+    while (remaining > 1e-9) {
+      final step = math.min(remaining, 1 / 60);
+      session.update(step, _intent);
+      // Edges (jump/attack/throw/roll presses) are one-frame events: deliver
+      // them on the first sub-step only, so a slow frame can't re-arm the
+      // player's input buffers several times.
+      _intent.clearEdges();
+      remaining -= step;
+    }
+    _handlePlayerEvents();
+    _handleSessionEvents();
+    _followCamera(clamped);
+
+    // Footsteps: cadence-gated, only while genuinely running on ground.
+    final p = session.player;
+    if (p.state == PlayerState.run && p.body.vx.abs() > kRunSpeed * 0.5) {
+      _stepClock -= clamped;
+      if (_stepClock <= 0) {
+        _stepClock = kFootstepInterval;
+        _stepAlt = !_stepAlt;
+        AudioService.instance?.playSfx(
+          _stepAlt ? 'step1' : 'step2',
+          volume: 0.28,
+        );
+        // Run dust: a faint puff kicked back from the heel, synced to the
+        // step sound so feet feel like they touch the ground. Smaller and
+        // dimmer than the landing puff - trail, not event.
+        world.add(
+          PuffFx(
+            Vector2(p.body.centerX - p.facing * 4.0, p.body.bottom - 1),
+            color: const Color(0x55C9BFA8),
+            life: 0.22,
+            radius: 2.5,
+          ),
+        );
+      }
+    } else {
+      // Re-arm so the first step lands just after movement starts (not
+      // instantly on a tap, which reads as a click).
+      _stepClock = kFootstepInterval * 0.5;
+    }
+
+    // Low-HP heartbeat bed under the combat music (dedupes internally).
+    final hearts = session.player.hearts.toDouble();
+    AudioService.instance?.setDanger(
+      hearts <= 1 && !session.player.isDead && !session.over,
+      level: dangerLevel(hearts),
+    );
+    // C5: 'Wrath Rising' texture over the boss bed from phase 2 on;
+    // drops with the boss or when the level ends (dedupes internally).
+    AudioService.instance?.setBossLayer(
+      bossLayerWanted(
+        bossPhase: session.boss?.phase ?? 0,
+        bossDead: !(session.boss?.alive ?? false),
+        over: session.over,
+      ),
+    );
+  }
+
+  @override
+  void onRemove() {
+    AudioService.instance?.setDanger(false);
+    AudioService.instance?.setBossLayer(false);
+    super.onRemove();
+  }
+
+  void _handlePlayerEvents() {
+    for (final e in session.takePlayerEvents()) {
+      switch (e) {
+        case PlayerEvent.jumped:
+          AudioService.instance?.playSfx('jump', volume: 0.55);
+          _playerComponent.triggerStretch(); // takeoff pairing for AKP-3a
+        case PlayerEvent.airJumped:
+          AudioService.instance?.playSfx('double_jump', volume: 0.55);
+          _playerComponent.triggerStretch();
+        case PlayerEvent.landed:
+          AudioService.instance?.playSfx('land', volume: 0.5);
+          _playerComponent.triggerSquash(); // AKP-3a
+          world.add(
+            PuffFx(
+              Vector2(session.player.body.centerX, session.player.body.bottom),
+            ),
+          );
+        case PlayerEvent.landedHard:
+          // Falls >= kHardLandTiles: a thud on top of the normal landing.
+          // Charter (AKP-3e): shake marks impacts that MATTER - this stays
+          // below the hurt bump (3.0) and respects the screen-shake toggle
+          // at the single _camBump consumer.
+          _camBump = math.max(_camBump, 2.0);
+          Haptics.light();
+          // B7: visible recovery crouch (deep squash, cosmetic, no input
+          // lock). landedHard always follows landed, so this replaces the
+          // normal squash triggered one case above.
+          _playerComponent.triggerHardSquash();
+        case PlayerEvent.hurt:
+          AudioService.instance?.playSfx('player_hit');
+          AudioService.instance?.duckMusic(); // C3: the mix reacts
+          Haptics.medium(); // taking a hit is the beat that must land
+          _camBump = 3.0; // AKP-3e: getting hit shakes; normal hits never do
+        case PlayerEvent.died:
+          break; // handled via SessionEventKind.levelFailed
+        case PlayerEvent.rolled:
+          AudioService.instance?.playSfx('whoosh', volume: 0.5);
+          world.add(
+            PuffFx(
+              Vector2(session.player.body.centerX, session.player.body.bottom),
+              life: 0.22,
+            ),
+          );
+        case PlayerEvent.airDashed:
+          // AKP-2b: slightly sharper whoosh, puff trails BEHIND the dash at
+          // body height (there is no ground under an air dash).
+          AudioService.instance?.playSfx('whoosh', volume: 0.65);
+          world.add(
+            PuffFx(
+              Vector2(
+                session.player.body.centerX - session.player.facing * 8,
+                session.player.body.centerY,
+              ),
+              life: 0.22,
+            ),
+          );
+        case PlayerEvent.attacked:
+          // AKP-4b: Skypiercer's lunge leaves a dash streak behind the
+          // burst, same read as the air-dash trail.
+          if (session.loadout.weapon.special == WeaponSpecial.lunge) {
+            world.add(
+              PuffFx(
+                Vector2(
+                  session.player.body.centerX - session.player.facing * 7,
+                  session.player.body.centerY + 4,
+                ),
+                color: const Color(0x99A9D1F7),
+                radius: 4,
+                life: 0.2,
+              ),
+            );
+          }
+          // 3-hit combo reads as a phrase: neutral / up / down+heavy.
+          AudioService.instance?.playSfx(
+            'swing${session.player.comboIndex.clamp(0, 2) + 1}',
+            volume: 0.7,
+          );
+        case PlayerEvent.droppedThrough:
+          break;
+      }
+    }
+  }
+
+  void _handleSessionEvents() {
+    for (final e in session.takeEvents()) {
+      final at = Vector2(e.x, e.y);
+      switch (e.kind) {
+        case SessionEventKind.coin:
+          AudioService.instance?.playSfx('coin', volume: 0.5);
+          world.add(SparkleFx(at));
+          _launchCoinFlight(at);
+        case SessionEventKind.applePickup:
+          AudioService.instance?.playSfx('heal', volume: 0.6);
+        case SessionEventKind.heartPickup:
+          AudioService.instance?.playSfx('heal', volume: 0.8);
+          world.add(SparkleFx(at, color: const Color(0xFFD53C3C), life: 0.4));
+        case SessionEventKind.feather:
+          AudioService.instance?.playSfx('feather');
+        case SessionEventKind.chestOpen:
+          AudioService.instance?.playSfx('chest_open');
+          world.add(SparkleFx(at, life: 0.5));
+        case SessionEventKind.spellCast:
+          // AKP-4d: golden flash + chime; effect-specific feedback rides on
+          // the events the effect itself emits (enemyHit / heal below).
+          AudioService.instance?.playSfx('secret', volume: 0.9);
+          Haptics.light();
+          world.add(SparkleFx(at, life: 0.5));
+          if (session.loadout.spell?.effect == SpellEffect.hearthLight) {
+            AudioService.instance?.playSfx('heal');
+          }
+        case SessionEventKind.secretFound:
+          AudioService.instance?.playSfx('secret');
+        case SessionEventKind.enemyHit:
+          AudioService.instance?.playSfx('enemy_hit');
+          // AKP-3e: shake only on the beats that earn it — crits and the
+          // combo finisher. Every normal hit shaking reads as noise (and
+          // the plan calls it a motion-sickness risk).
+          if (e.crit || session.player.comboIndex == 2) {
+            _camBump = 3.0;
+          } else {
+            // B2 swing weight: the hammer thuds on every connect.
+            final bump = connectBump(swingWeightFor(session.loadout.weapon));
+            if (bump > _camBump) _camBump = bump;
+          }
+          // AKP-3c: floating damage number (skipped silently at the cap).
+          if (e.amount > 0 && DamageNumberFx.hasBudget) {
+            world.add(DamageNumberFx(at.clone(), e.amount, crit: e.crit));
+          }
+          // AKP-4b: Ember Fang identity — hits shed embers (the ignite DoT
+          // is session-side; this is its visual receipt).
+          if (session.loadout.burnOnHit) {
+            world.add(
+              SparkleFx(at.clone(), color: const Color(0xFFF2A24B), life: 0.3),
+            );
+          }
+        case SessionEventKind.enemyDeath:
+          AudioService.instance?.playSfx('enemy_death');
+          Haptics.light(); // kill confirm
+          world.add(DeathFx(at, _deathAnim.clone()));
+        case SessionEventKind.ashLeft:
+          _ashDecals.add(world, at, footprint: (e.w * 0.8).clamp(8.0, 24.0));
+        case SessionEventKind.wallHit:
+          AudioService.instance?.playSfx('block', volume: 0.7);
+        case SessionEventKind.wallBreak:
+          AudioService.instance?.playSfx('block');
+          // AKP-4b: the Woodsman's Axe one-chop break earns a heavier
+          // rubble burst than chipping a wall down with a sword.
+          world.add(
+            PuffFx(
+              at,
+              color: const Color(0xCC8A7B66),
+              radius: session.loadout.wallBreaker ? 10 : 7,
+              life: session.loadout.wallBreaker ? 0.5 : 0.4,
+            ),
+          );
+        case SessionEventKind.appleThrown:
+          AudioService.instance?.playSfx('whoosh', volume: 0.5);
+        case SessionEventKind.appleBroke:
+          world.add(
+            PuffFx(at, color: const Color(0xAAB6D53C), radius: 3, life: 0.2),
+          );
+        case SessionEventKind.attackBlocked:
+          AudioService.instance?.playSfx('block');
+          world.add(
+            PuffFx(at, color: const Color(0xCCB8C0C8), radius: 4, life: 0.22),
+          );
+        case SessionEventKind.emberShot:
+          AudioService.instance?.playSfx('whoosh', volume: 0.45);
+        case SessionEventKind.mimicRevealed:
+          // Leaves burst off the shrub as it starts to shiver.
+          AudioService.instance?.playSfx('block', volume: 0.6);
+          Haptics.light();
+          world.add(
+            PuffFx(at, color: const Color(0xAA6E8A5A), radius: 9, life: 0.35),
+          );
+        case SessionEventKind.bossAwakened:
+          // Wake roar: heavy thud + camera bump; the stone shell cracks off
+          // (RubbleFx) while the statue tint crossfades back to flesh.
+          AudioService.instance?.playSfx('enemy_hit', volume: 1.0);
+          AudioService.instance?.playSfx('block', volume: 0.7);
+          Haptics.heavy();
+          _camBump = 3.5;
+          world.add(RubbleFx(at));
+        case SessionEventKind.bossPhase:
+          AudioService.instance?.duckMusic();
+          // Phase-up: thud + a shard burst off the boss; the component runs
+          // the rage flash (event carries the phase, not a position).
+          AudioService.instance?.playSfx('enemy_hit', volume: 0.9);
+          Haptics.heavy();
+          _camBump = 4.0;
+          final phaseBoss = session.boss;
+          if (phaseBoss != null) {
+            world.add(
+              RubbleFx(
+                Vector2(phaseBoss.centerX, phaseBoss.centerY),
+                seed: 3,
+                count: 18,
+                power: 1.2,
+              ),
+            );
+          }
+        case SessionEventKind.bossDefeated:
+          AudioService.instance?.duckMusic();
+          // The golem breaks apart: a 2x death flash + heavy rubble burst
+          // over the coin shower (the session freezes the frame via
+          // kBossKillPause, so the moment reads before physics resume).
+          AudioService.instance?.playSfx('boss_death');
+          Haptics.heavy();
+          _camBump = 5.0;
+          world.add(DeathFx(at, _deathAnim.clone(), size: Vector2(80, 82)));
+          world.add(RubbleFx(at, seed: 11, count: 26, power: 1.5));
+        case SessionEventKind.emberShotBroke:
+          world.add(
+            PuffFx(at, color: const Color(0xCCE86A17), radius: 4, life: 0.25),
+          );
+        case SessionEventKind.checkpointLit:
+          AudioService.instance?.playSfx('unlock', volume: 0.8);
+          Haptics.light();
+          world.add(SparkleFx(at, life: 0.6));
+        case SessionEventKind.playerDied:
+          // Death beat: the sim holds kDeathHold here with the player's
+          // death animation playing; a burst marks the spot so the cause of
+          // death is on screen before the camera snaps to the campfire.
+          AudioService.instance?.playSfx('player_hit');
+          Haptics.heavy();
+          _camBump = 4.0;
+          world.add(
+            PuffFx(at, color: const Color(0xCCE84A3D), radius: 10, life: 0.5),
+          );
+          world.add(RubbleFx(at, seed: 5, count: 10, power: 0.8));
+        case SessionEventKind.respawned:
+          // A life spent, not a run lost: quick puff at the campfire and a
+          // camera snap so the player never wonders where they went.
+          AudioService.instance?.playSfx('heal', volume: 0.7);
+          world.add(PuffFx(at, radius: 8, life: 0.35));
+          _camSmoothX = at.x;
+          _camSmoothY = at.y;
+          _camBump = 2.0;
+        case SessionEventKind.levelComplete:
+          _persistResults();
+          AudioService.instance?.playMusic('victory', loop: false);
+          overlays.add(overlayResults);
+        case SessionEventKind.levelFailed:
+          AudioService.instance?.playMusic('defeat', loop: false);
+          Haptics.heavy();
+          overlays.add(overlayFail);
+      }
+    }
+  }
+
+  void _followCamera(double dt) {
+    final p = session.player;
+    var targetX = p.body.centerX + kCameraLookAhead * p.facing;
+    var targetY = p.body.centerY - 12;
+    // Boss arena framing: with the boss awake, frame player+boss together
+    // (player never nearer than 48 px to an edge) instead of look-ahead, so
+    // shockwaves and lobs are never thrown from off-screen.
+    final boss = session.boss;
+    if (boss != null && !boss.sleeping) {
+      targetX = bossCameraTargetX(
+        playerX: p.body.centerX,
+        bossX: boss.centerX,
+        viewWidth: viewWidth,
+      );
+    }
+    final peeking =
+        _intent.down &&
+        p.body.onGround &&
+        (p.state == PlayerState.idle || p.state == PlayerState.run);
+    if (peeking) targetY += kCameraPeekDown;
+
+    // Clamp to level bounds (center the axis when the level is smaller).
+    final levelW = session.level.width * kTileSize;
+    final levelH = session.level.height * kTileSize;
+    targetX = levelW <= viewWidth
+        ? levelW / 2
+        : targetX.clamp(viewWidth / 2, levelW - viewWidth / 2);
+    targetY = levelH <= viewHeight
+        ? levelH / 2
+        : targetY.clamp(viewHeight / 2, levelH - viewHeight / 2);
+
+    // Frame-rate-independent exponential smoothing: the old `k * dt` linear
+    // factor under-corrects at low fps and over-corrects at high fps, so
+    // follow speed (and the apparent "weight" of the camera) changed with
+    // frame rate. 1 - e^(-k*dt) converges identically at any fps.
+    final k = 1 - math.exp(-kCameraSmooth * dt);
+    _camBump = math.max(0, _camBump - 12 * dt);
+    // Screen-shake toggle (accessibility): one guard at the application
+    // site covers every _camBump producer, present and future.
+    final shakeOn = AudioService.instance?.settings.screenShake ?? true;
+    final bumpY = _camBump > 0 && shakeOn
+        ? (_bumpRand.nextDouble() - 0.5) * _camBump * 2
+        : 0.0;
+    _camSmoothX += (targetX - _camSmoothX) * k;
+    _camSmoothY += (targetY - _camSmoothY) * k;
+    // Pixel snap (movement-stutter fix): the 352x198 viewport is upscaled
+    // ~5-6x with nearest-neighbor filtering. A camera at fractional world
+    // coordinates makes every tile edge resample differently each frame —
+    // full-screen shimmer/judder whenever the camera pans (i.e. whenever
+    // the player moves). Smoothing runs on unrounded floats so no motion is
+    // lost; only the rendered position is quantized to whole world pixels.
+    camera.viewfinder.position = _camRender
+      ..setValues(
+        _camSmoothX.roundToDouble(),
+        (_camSmoothY + bumpY).roundToDouble(),
+      );
+  }
+
+  // Unrounded camera state (smoothing accumulator) + scratch render vector.
+  double _camSmoothX = 0;
+  double _camSmoothY = 0;
+  final Vector2 _camRender = Vector2.zero();
+
+  // -- flow -------------------------------------------------------------------
+
+  void pauseGame() {
+    // sessionReady guard: `session` is late-initialized in onLoad, and both
+    // the lifecycle listener (Home/lock during the loading screen) and the
+    // system back gesture can fire before it exists — without the guard
+    // that's a LateInitializationError crash on a normal user action.
+    if (!sessionReady || overlays.isActive(overlayPause) || session.over) {
+      return;
+    }
+    overlays.add(overlayPause);
+    pauseEngine();
+  }
+
+  /// Backgrounding mid-run (Home/lock/call) must come back to the PAUSE
+  /// MENU, not silently resume gameplay — Flame's default auto-resumes the
+  /// engine on return. Calling pauseGame() first resets Flame's
+  /// backgrounded flag (via pauseEngine), so the base class won't resume.
+  /// If the run is already over or paused this is a no-op and the default
+  /// engine pause/resume still applies (overlays keep rendering).
+  @override
+  void lifecycleStateChange(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      pauseGame();
+    }
+    super.lifecycleStateChange(state);
+  }
+
+  void resumeGame() {
+    overlays.remove(overlayPause);
+    resumeEngine();
+  }
+
+  /// Results persistence — spec: recordFor(levelId) + wallet earn + kill
+  /// counting to the equipped skin, saved exactly once at level end.
+  void _persistResults() {
+    if (_resultsPersisted || !AppState.isReady) return;
+    _resultsPersisted = true;
+    final r = session.results!;
+    final save = AppState.save;
+    if (daily) {
+      // Daily Delve is a remix: it pays out normally but never touches
+      // campaign level records (would skew unlock progression). Best time
+      // is kept for today only — yesterday's record simply ages out.
+      final key = dailyKey(DateTime.now());
+      if (save.dailyBestDate != key || r.timeMs < save.dailyBestTimeMs) {
+        save.dailyBestDate = key;
+        save.dailyBestTimeMs = r.timeMs;
+      }
+      save.coins += r.totalCoins;
+      save.feathers += session.feathersCollected;
+      save.skinKills[save.equippedSkin] =
+          (save.skinKills[save.equippedSkin] ?? 0) + session.kills;
+      AppState.persist();
+      return;
+    }
+    final rec = save.recordFor(levelId);
+    // Unlock notice for the clear screen: only a FIRST finish opens things.
+    unlockNotice = rec.finished ? const [] : unlocksOnFirstClear(levelId);
+    mergeLevelResult(rec, r, session.difficulty);
+    save.coins += r.totalCoins; // run coins + perfect-clear bonus
+    save.feathers += session.feathersCollected;
+    save.skinKills[save.equippedSkin] =
+        (save.skinKills[save.equippedSkin] ?? 0) + session.kills;
+    if (levelId == 'w1_l1') save.tutorialSeen = true;
+    AppState.persist();
+  }
+}
+
+/// Adapts Flutter's [Drag] interface (fed by the
+/// [ImmediateMultiDragGestureRecognizer] registered in the [EmberGame]
+/// constructor) to the game-level MultiDragListener API. Mirrors Flame's
+/// internal FlameDragAdapter, which is not exported.
+class _GameDragAdapter implements Drag {
+  _GameDragAdapter(this._game, Offset startPoint) {
+    _id = _dragIdCounter++;
+    _game.handleDragStart(
+      _id,
+      DragStartDetails(
+        sourceTimeStamp: Duration.zero,
+        globalPosition: startPoint,
+        localPosition: _game.renderBox.globalToLocal(startPoint),
+      ),
+    );
+  }
+
+  static int _dragIdCounter = 0;
+  final EmberGame _game;
+  late final int _id;
+
+  @override
+  void update(DragUpdateDetails details) =>
+      _game.handleDragUpdate(_id, details);
+
+  @override
+  void end(DragEndDetails details) => _game.handleDragEnd(_id, details);
+
+  @override
+  void cancel() => _game.handleDragCancel(_id);
+}
