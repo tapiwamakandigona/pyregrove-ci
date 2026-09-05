@@ -42,6 +42,16 @@ class _TitleScreenState extends State<TitleScreen>
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _drift.stop();
+    } else if (!_drift.isAnimating) {
+      _drift.repeat();
+    }
+  }
+
   void _open(Widget screen) {
     AudioService.instance?.playSfx('ui_tap');
     AudioService.instance?.setAmbience(false);
@@ -119,21 +129,28 @@ class _TitleScreenState extends State<TitleScreen>
             },
           ),
           SafeArea(
-            // Overflow sweep (alpha.16): the menu column is taller than a
-            // small landscape phone at 1.3x text and wider than a 320 px
-            // portrait — FittedBox(scaleDown) shrinks it to fit either axis
-            // instead of clipping content (DEMAND: nothing unseeable).
-            child: Center(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Column(
+            // Reflow instead of shrinking controls and accessibility text.
+            // Only the decorative logo scales; short screens scroll naturally.
+            child: LayoutBuilder(
+              builder: (context, box) => SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 36),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: (box.maxHeight - 60).clamp(0, double.infinity),
+                  ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 480),
+                      child: Column(
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // Logo treatment: ember glow behind the wordmark.
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
                         Container(
                           width: 340,
                           height: 70,
@@ -162,21 +179,25 @@ class _TitleScreenState extends State<TitleScreen>
                             ],
                           ),
                         ),
-                      ],
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 4),
                     const Text(
                       'Delve the burning grove',
                       style: TextStyle(
-                        color: Colors.white60,
+                        color: Colors.white70,
                         fontSize: 14,
                         letterSpacing: 1.5,
                       ),
+                      textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 28),
                     FilledButton(
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF3E8948),
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(220, 56),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 56,
                           vertical: 14,
@@ -208,8 +229,9 @@ class _TitleScreenState extends State<TitleScreen>
                     OutlinedButton(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFFE8A33D),
+                        minimumSize: const Size(220, 56),
                         side: const BorderSide(color: Color(0x66E8A33D)),
-                        backgroundColor: const Color(0x66141420),
+                        backgroundColor: const Color(0xCC141420),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 28,
                           vertical: 10,
@@ -231,30 +253,31 @@ class _TitleScreenState extends State<TitleScreen>
                           Text(
                             _dailySubtitle,
                             style: const TextStyle(
-                              color: Colors.white60,
-                              fontSize: 11,
+                              color: Colors.white70,
+                              fontSize: 12,
                               letterSpacing: 0.5,
                             ),
+                            textAlign: TextAlign.center,
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 10,
+                      runSpacing: 10,
                       children: [
                         _MenuButton(
                           label: 'SHOP',
                           icon: Icons.storefront,
                           onTap: () => _open(const ShopScreen()),
                         ),
-                        const SizedBox(width: 10),
                         _MenuButton(
                           label: 'SETTINGS',
                           icon: Icons.settings,
                           onTap: () => _open(const SettingsScreen()),
                         ),
-                        const SizedBox(width: 10),
                         _MenuButton(
                           label: 'CREDITS',
                           icon: Icons.menu_book,
@@ -262,7 +285,10 @@ class _TitleScreenState extends State<TitleScreen>
                         ),
                       ],
                     ),
-                  ],
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -277,8 +303,8 @@ class _TitleScreenState extends State<TitleScreen>
               child: Text(
                 'v$kAppVersion',
                 style: TextStyle(
-                  color: Colors.white38,
-                  fontSize: 10,
+                  color: Colors.white70,
+                  fontSize: 12,
                   letterSpacing: 0.5,
                 ),
               ),
@@ -343,8 +369,9 @@ class _MenuButton extends StatelessWidget {
     return OutlinedButton.icon(
       style: OutlinedButton.styleFrom(
         foregroundColor: const Color(0xFFE8A33D),
+        minimumSize: const Size(48, 48),
         side: const BorderSide(color: Color(0x66E8A33D)),
-        backgroundColor: const Color(0x66141420),
+        backgroundColor: const Color(0xCC141420),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
       ),
       onPressed: onTap,
