@@ -59,6 +59,14 @@ const double kCoyoteTime = 0.12; // s of grace after walking off a ledge
 const double kJumpBufferTime = 0.16; // s a jump press is remembered
 const int kMaxAirJumps = 1; // double jump (2 with triple-jump special)
 const double kAirJumpSpeed = 265.0;
+// Forgiving traversal is a separate, visible player preference. Classic
+// constants above stay unchanged, including the deterministic arc contract.
+// Same rise/height, softer descent: 28% less downward acceleration and a
+// 24% lower terminal speed. An early second press is spent now, then fired
+// near the apex so a normal double tap does not throw away the first jump.
+const double kForgivingFallGravityMultiplier = 1.15;
+const double kForgivingMaxFallSpeed = 320.0;
+const double kQueuedAirJumpSpeed = -20.0;
 // Ceiling corner correction (Celeste-style forgiveness): a rising jump that
 // clips a ceiling lip by up to this many px slides around it instead of
 // bonking. Player-only; enemies keep exact collision.

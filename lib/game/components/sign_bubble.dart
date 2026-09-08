@@ -11,6 +11,7 @@ import 'package:flame/text.dart';
 import 'package:flutter/painting.dart' show TextPainter, TextStyle;
 
 import '../ember_game.dart';
+import '../../l10n/language.dart';
 
 class SignBubbleComponent extends PositionComponent
     with HasGameReference<EmberGame> {
@@ -33,6 +34,7 @@ class SignBubbleComponent extends PositionComponent
   final _bubblePaint = ui.Paint()..color = const ui.Color(0xEEF4EAD5);
 
   String _bubbleFor = '';
+  String _languageFor = '';
   TextPainter? _bubbleTp;
 
   /// Layout box of the bubble last drawn (world space), for tests.
@@ -45,14 +47,17 @@ class SignBubbleComponent extends PositionComponent
       lastRect = null;
       return;
     }
-    if (!identical(active.text, _bubbleFor)) {
+    if (!identical(active.text, _bubbleFor) ||
+        _languageFor != game.interfaceLanguage) {
       _bubbleFor = active.text;
+      _languageFor = game.interfaceLanguage;
       // Wrap to the camera view. Root cause of the old w2_boss clip: the
       // painter laid out on one unbounded line, so any text wider than the
       // 352px view clipped regardless of the edge clamp below (the clamp can
       // only save bubbles NARROWER than the view).
-      _bubbleTp = _bubbleText.toTextPainter(active.text)
-        ..layout(maxWidth: kBubbleMaxWidth);
+      _bubbleTp = _bubbleText.toTextPainter(
+        groveText(active.text, _languageFor),
+      )..layout(maxWidth: kBubbleMaxWidth);
     }
     final tp = _bubbleTp!;
     final w = tp.width + 6, h = tp.height + 4;

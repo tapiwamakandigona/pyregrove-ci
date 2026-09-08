@@ -30,27 +30,28 @@ class LevelRecord {
     this.hardCleared = false,
   });
 
-  int get medals => (finished ? 1 : 0) + (allChests ? 1 : 0) + (lowDamage ? 1 : 0);
+  int get medals =>
+      (finished ? 1 : 0) + (allChests ? 1 : 0) + (lowDamage ? 1 : 0);
 
   Map<String, Object> toJson() => {
-        'finished': finished,
-        'allChests': allChests,
-        'lowDamage': lowDamage,
-        'chestsOpened': chestsOpened,
-        'secretsFound': secretsFound,
-        'bestTimeMs': bestTimeMs,
-        'hardCleared': hardCleared,
-      };
+    'finished': finished,
+    'allChests': allChests,
+    'lowDamage': lowDamage,
+    'chestsOpened': chestsOpened,
+    'secretsFound': secretsFound,
+    'bestTimeMs': bestTimeMs,
+    'hardCleared': hardCleared,
+  };
 
   factory LevelRecord.fromJson(Map<String, dynamic> j) => LevelRecord(
-        finished: j['finished'] as bool? ?? false,
-        allChests: j['allChests'] as bool? ?? false,
-        lowDamage: j['lowDamage'] as bool? ?? false,
-        chestsOpened: (j['chestsOpened'] as num?)?.toInt() ?? 0,
-        secretsFound: (j['secretsFound'] as num?)?.toInt() ?? 0,
-        bestTimeMs: (j['bestTimeMs'] as num?)?.toInt() ?? 0,
-        hardCleared: j['hardCleared'] as bool? ?? false,
-      );
+    finished: j['finished'] as bool? ?? false,
+    allChests: j['allChests'] as bool? ?? false,
+    lowDamage: j['lowDamage'] as bool? ?? false,
+    chestsOpened: (j['chestsOpened'] as num?)?.toInt() ?? 0,
+    secretsFound: (j['secretsFound'] as num?)?.toInt() ?? 0,
+    bestTimeMs: (j['bestTimeMs'] as num?)?.toInt() ?? 0,
+    hardCleared: j['hardCleared'] as bool? ?? false,
+  );
 }
 
 class SaveData {
@@ -65,6 +66,8 @@ class SaveData {
   Set<String> ownedSpells; // AKP-4d spell slot (owner-confirmed 2026-07-25)
   String equippedSpell; // '' = no spell equipped
   String difficulty; // 'easy' | 'medium' | 'hard' (Stage 2, 2026-07-25)
+  bool
+  forgivingJumps; // full-height taps + queued second jump; classic is opt-out
   Map<String, LevelRecord> levels; // level id (e.g. 'w1_l1') -> record
   bool tutorialSeen;
   bool legacyBonusGranted; // one-time coin gift for v1 dice-save owners
@@ -83,40 +86,42 @@ class SaveData {
     Set<String>? ownedSpells,
     this.equippedSpell = '',
     this.difficulty = 'medium',
+    this.forgivingJumps = true,
     Map<String, LevelRecord>? levels,
     this.tutorialSeen = false,
     this.legacyBonusGranted = false,
     this.dailyBestDate = '',
     this.dailyBestTimeMs = 0,
-  })  : ownedWeapons = ownedWeapons ?? {'squire_blade'},
-        ownedSkins = ownedSkins ?? {'red'},
-        skinKills = skinKills ?? {},
-        ownedAbilities = ownedAbilities ?? {},
-        ownedSpells = ownedSpells ?? {},
-        levels = levels ?? {};
+  }) : ownedWeapons = ownedWeapons ?? {'squire_blade'},
+       ownedSkins = ownedSkins ?? {'red'},
+       skinKills = skinKills ?? {},
+       ownedAbilities = ownedAbilities ?? {},
+       ownedSpells = ownedSpells ?? {},
+       levels = levels ?? {};
 
   LevelRecord recordFor(String levelId) =>
       levels.putIfAbsent(levelId, LevelRecord.new);
 
   Map<String, Object> toJson() => {
-        'version': saveSchemaVersion,
-        'coins': coins,
-        'feathers': feathers,
-        'ownedWeapons': ownedWeapons.toList(),
-        'equippedWeapon': equippedWeapon,
-        'ownedSkins': ownedSkins.toList(),
-        'skinKills': skinKills,
-        'equippedSkin': equippedSkin,
-        'ownedAbilities': ownedAbilities.toList(),
-        'ownedSpells': ownedSpells.toList(),
-        'equippedSpell': equippedSpell,
-        'difficulty': difficulty,
-        'levels': levels.map((k, v) => MapEntry(k, v.toJson())),
-        'tutorialSeen': tutorialSeen,
-        'legacyBonusGranted': legacyBonusGranted,
-        'dailyBestDate': dailyBestDate,
-        'dailyBestTimeMs': dailyBestTimeMs,
-      };
+    'version': saveSchemaVersion,
+    'coins': coins,
+    'feathers': feathers,
+    'ownedWeapons': ownedWeapons.toList(),
+    'equippedWeapon': equippedWeapon,
+    'ownedSkins': ownedSkins.toList(),
+    'skinKills': skinKills,
+    'equippedSkin': equippedSkin,
+    'ownedAbilities': ownedAbilities.toList(),
+    'ownedSpells': ownedSpells.toList(),
+    'equippedSpell': equippedSpell,
+    'difficulty': difficulty,
+    'forgivingJumps': forgivingJumps,
+    'levels': levels.map((k, v) => MapEntry(k, v.toJson())),
+    'tutorialSeen': tutorialSeen,
+    'legacyBonusGranted': legacyBonusGranted,
+    'dailyBestDate': dailyBestDate,
+    'dailyBestTimeMs': dailyBestTimeMs,
+  };
 
   factory SaveData.fromJson(Map<String, dynamic> j) {
     final version = (j['version'] as num?)?.toInt() ?? 1;
@@ -128,24 +133,33 @@ class SaveData {
     return SaveData(
       coins: (j['coins'] as num?)?.toInt() ?? 0,
       feathers: (j['feathers'] as num?)?.toInt() ?? 0,
-      ownedWeapons: ((j['ownedWeapons'] as List?)?.cast<String>() ??
-              ['squire_blade'])
-          .toSet(),
+      ownedWeapons:
+          ((j['ownedWeapons'] as List?)?.cast<String>() ?? ['squire_blade'])
+              .toSet(),
       equippedWeapon: j['equippedWeapon'] as String? ?? 'squire_blade',
-      ownedSkins: ((j['ownedSkins'] as List?)?.cast<String>() ?? ['red']).toSet(),
-      skinKills: (j['skinKills'] as Map?)
-              ?.map((k, v) => MapEntry(k as String, (v as num).toInt())) ??
+      ownedSkins: ((j['ownedSkins'] as List?)?.cast<String>() ?? ['red'])
+          .toSet(),
+      skinKills:
+          (j['skinKills'] as Map?)?.map(
+            (k, v) => MapEntry(k as String, (v as num).toInt()),
+          ) ??
           {},
       equippedSkin: j['equippedSkin'] as String? ?? 'red',
-      ownedAbilities:
-          ((j['ownedAbilities'] as List?)?.cast<String>() ?? []).toSet(),
-      ownedSpells:
-          ((j['ownedSpells'] as List?)?.cast<String>() ?? []).toSet(),
+      ownedAbilities: ((j['ownedAbilities'] as List?)?.cast<String>() ?? [])
+          .toSet(),
+      ownedSpells: ((j['ownedSpells'] as List?)?.cast<String>() ?? []).toSet(),
       equippedSpell: j['equippedSpell'] as String? ?? '',
       difficulty: j['difficulty'] as String? ?? 'medium',
-      levels: (j['levels'] as Map?)?.map((k, v) => MapEntry(
+      forgivingJumps: j['forgivingJumps'] is bool
+          ? j['forgivingJumps'] as bool
+          : true,
+      levels:
+          (j['levels'] as Map?)?.map(
+            (k, v) => MapEntry(
               k as String,
-              LevelRecord.fromJson((v as Map).cast<String, dynamic>()))) ??
+              LevelRecord.fromJson((v as Map).cast<String, dynamic>()),
+            ),
+          ) ??
           {},
       tutorialSeen: j['tutorialSeen'] as bool? ?? false,
       legacyBonusGranted: j['legacyBonusGranted'] as bool? ?? false,

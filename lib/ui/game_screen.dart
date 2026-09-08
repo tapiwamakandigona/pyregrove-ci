@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../audio/audio_service.dart';
 import '../game/ember_game.dart';
 import '../game/session.dart';
+import '../l10n/language.dart';
 import '../meta/progress_state.dart';
 import 'app_state.dart';
 import '../telemetry/telemetry_service.dart';
@@ -145,6 +146,7 @@ class _GameScreenState extends State<GameScreen> {
     // bar. viewPadding (not padding) so hidden-but-reappearing system bars
     // in immersive modes are still respected.
     final mq = MediaQuery.of(context);
+    _game.interfaceLanguage = Localizations.localeOf(context).languageCode;
     _game.setSafeArea(
       EdgeInsets.fromLTRB(
         mq.viewPadding.left,
@@ -199,14 +201,16 @@ class _Panel extends StatelessWidget {
     return Container(
       color: Colors.black54,
       alignment: Alignment.center,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-        decoration: BoxDecoration(
-          color: const Color(0xF0141420),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFF3A3A52)),
+      child: SingleChildScrollView(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+          decoration: BoxDecoration(
+            color: const Color(0xF0141420),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF3A3A52)),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: children),
         ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: children),
       ),
     );
   }
@@ -231,7 +235,7 @@ class PauseOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return _Panel(
       children: [
-        const Text(
+        const GroveText(
           'PAUSED',
           style: TextStyle(
             fontFamily: 'Cinzel',
@@ -247,12 +251,15 @@ class PauseOverlay extends StatelessWidget {
             backgroundColor: const Color(0xFF3E8948),
           ),
           onPressed: onResume,
-          child: const Text('Resume'),
+          child: const GroveText('Resume'),
         ),
         const SizedBox(height: 8),
         if (onRestart != null)
-          TextButton(onPressed: onRestart, child: const Text('Restart level')),
-        TextButton(onPressed: onLeave, child: const Text('Leave level')),
+          TextButton(
+            onPressed: onRestart,
+            child: const GroveText('Restart level'),
+          ),
+        TextButton(onPressed: onLeave, child: const GroveText('Leave level')),
       ],
     );
   }
@@ -267,7 +274,7 @@ class FailOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return _Panel(
       children: [
-        const Text(
+        const GroveText(
           'FALLEN...',
           style: TextStyle(
             fontFamily: 'Cinzel',
@@ -283,10 +290,10 @@ class FailOverlay extends StatelessWidget {
             backgroundColor: const Color(0xFF3E8948),
           ),
           onPressed: onRetry,
-          child: const Text('Try again'),
+          child: const GroveText('Try again'),
         ),
         const SizedBox(height: 8),
-        TextButton(onPressed: onLeave, child: const Text('Leave')),
+        TextButton(onPressed: onLeave, child: const GroveText('Leave')),
       ],
     );
   }
@@ -374,7 +381,7 @@ class ResultsOverlayState extends State<ResultsOverlay> {
               ),
               const SizedBox(width: 8),
               Text(
-                label,
+                gt(context, label),
                 style: TextStyle(
                   fontSize: 13,
                   color: earned ? Colors.white : Colors.white38,
@@ -391,7 +398,7 @@ class ResultsOverlayState extends State<ResultsOverlay> {
   Widget build(BuildContext context) {
     return _Panel(
       children: [
-        const Text(
+        const GroveText(
           'LEVEL CLEAR!',
           style: TextStyle(
             fontFamily: 'Cinzel',
@@ -462,23 +469,26 @@ class ResultsOverlayState extends State<ResultsOverlay> {
           ),
         ],
         const SizedBox(height: 16),
-        Row(
-          mainAxisSize: MainAxisSize.min,
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 12,
+          runSpacing: 8,
           children: [
-            TextButton(onPressed: widget.onReplay, child: const Text('Replay')),
-            const SizedBox(width: 12),
+            TextButton(
+              onPressed: widget.onReplay,
+              child: const GroveText('Replay'),
+            ),
             if (widget.onNext != null) ...[
               TextButton(
                 onPressed: widget.onContinue,
-                child: const Text('Levels'),
+                child: const GroveText('Levels'),
               ),
-              const SizedBox(width: 12),
               FilledButton(
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF3E8948),
                 ),
                 onPressed: widget.onNext,
-                child: const Text('Next level'),
+                child: const GroveText('Next level'),
               ),
             ] else
               FilledButton(
@@ -486,7 +496,7 @@ class ResultsOverlayState extends State<ResultsOverlay> {
                   backgroundColor: const Color(0xFF3E8948),
                 ),
                 onPressed: widget.onContinue,
-                child: const Text('Continue'),
+                child: const GroveText('Continue'),
               ),
           ],
         ),

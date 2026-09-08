@@ -7,6 +7,7 @@ import '../audio/audio_service.dart';
 import '../meta/daily.dart';
 import '../meta/progress_state.dart';
 import '../version.dart';
+import '../l10n/language.dart';
 import 'app_state.dart';
 import 'credits_screen.dart';
 import 'game_screen.dart';
@@ -142,149 +143,155 @@ class _TitleScreenState extends State<TitleScreen>
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 480),
                       child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Logo treatment: ember glow behind the wordmark.
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                        Container(
-                          width: 340,
-                          height: 70,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(60),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0x55E8A33D),
-                                blurRadius: 48,
-                                spreadRadius: 4,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Text(
-                          'PYREGROVE',
-                          style: TextStyle(
-                            fontFamily: 'Cinzel',
-                            fontSize: 44,
-                            letterSpacing: 7,
-                            color: Color(0xFFE8A33D),
-                            fontWeight: FontWeight.bold,
-                            shadows: [
-                              Shadow(color: Colors.black, offset: Offset(0, 3)),
-                              Shadow(color: Color(0x88E8631A), blurRadius: 18),
-                            ],
-                          ),
-                        ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Delve the burning grove',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                        letterSpacing: 1.5,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 28),
-                    FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF3E8948),
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(220, 56),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 56,
-                          vertical: 14,
-                        ),
-                      ),
-                      onPressed: () {
-                        // First run goes straight into Forest Edge; the
-                        // level select appears once something is cleared.
-                        final first = firstRunLevelId(AppState.save);
-                        _open(
-                          first != null
-                              ? GameScreen(levelId: first)
-                              : const LevelSelectScreen(),
-                        );
-                      },
-                      child: const Text(
-                        'PLAY',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontFamily: 'Cinzel',
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    // Daily Delve — deterministic daily remix. No streaks, no
-                    // countdown copy: just today's level and today's best.
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFFE8A33D),
-                        minimumSize: const Size(220, 56),
-                        side: const BorderSide(color: Color(0x66E8A33D)),
-                        backgroundColor: const Color(0xCC141420),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 28,
-                          vertical: 10,
-                        ),
-                      ),
-                      onPressed: _playDaily,
-                      child: Column(
                         mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text(
-                            'DAILY DELVE',
-                            style: TextStyle(
-                              fontFamily: 'Cinzel',
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              letterSpacing: 2,
+                          // Logo treatment: ember glow behind the wordmark.
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  width: 340,
+                                  height: 70,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(60),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Color(0x55E8A33D),
+                                        blurRadius: 48,
+                                        spreadRadius: 4,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Text(
+                                  'PYREGROVE',
+                                  style: TextStyle(
+                                    fontFamily: 'Cinzel',
+                                    fontSize: 44,
+                                    letterSpacing: 7,
+                                    color: Color(0xFFE8A33D),
+                                    fontWeight: FontWeight.bold,
+                                    shadows: [
+                                      Shadow(
+                                        color: Colors.black,
+                                        offset: Offset(0, 3),
+                                      ),
+                                      Shadow(
+                                        color: Color(0x88E8631A),
+                                        blurRadius: 18,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          Text(
-                            _dailySubtitle,
-                            style: const TextStyle(
+                          const SizedBox(height: 4),
+                          const GroveText(
+                            'Delve the burning grove',
+                            style: TextStyle(
                               color: Colors.white70,
-                              fontSize: 12,
-                              letterSpacing: 0.5,
+                              fontSize: 14,
+                              letterSpacing: 1.5,
                             ),
                             textAlign: TextAlign.center,
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        _MenuButton(
-                          label: 'SHOP',
-                          icon: Icons.storefront,
-                          onTap: () => _open(const ShopScreen()),
-                        ),
-                        _MenuButton(
-                          label: 'SETTINGS',
-                          icon: Icons.settings,
-                          onTap: () => _open(const SettingsScreen()),
-                        ),
-                        _MenuButton(
-                          label: 'CREDITS',
-                          icon: Icons.menu_book,
-                          onTap: () => _open(const CreditsScreen()),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(height: 28),
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF3E8948),
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(220, 56),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 56,
+                                vertical: 14,
+                              ),
+                            ),
+                            onPressed: () {
+                              // First run goes straight into Forest Edge; the
+                              // level select appears once something is cleared.
+                              final first = firstRunLevelId(AppState.save);
+                              _open(
+                                first != null
+                                    ? GameScreen(levelId: first)
+                                    : const LevelSelectScreen(),
+                              );
+                            },
+                            child: const GroveText(
+                              'PLAY',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontFamily: 'Cinzel',
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          // Daily Delve — deterministic daily remix. No streaks, no
+                          // countdown copy: just today's level and today's best.
+                          OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFFE8A33D),
+                              minimumSize: const Size(220, 56),
+                              side: const BorderSide(color: Color(0x66E8A33D)),
+                              backgroundColor: const Color(0xCC141420),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 28,
+                                vertical: 10,
+                              ),
+                            ),
+                            onPressed: _playDaily,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const GroveText(
+                                  'DAILY DELVE',
+                                  style: TextStyle(
+                                    fontFamily: 'Cinzel',
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    letterSpacing: 2,
+                                  ),
+                                ),
+                                Text(
+                                  _dailySubtitle,
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                    letterSpacing: 0.5,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              _MenuButton(
+                                label: 'SHOP',
+                                icon: Icons.storefront,
+                                onTap: () => _open(const ShopScreen()),
+                              ),
+                              _MenuButton(
+                                label: 'SETTINGS',
+                                icon: Icons.settings,
+                                onTap: () => _open(const SettingsScreen()),
+                              ),
+                              _MenuButton(
+                                label: 'CREDITS',
+                                icon: Icons.menu_book,
+                                onTap: () => _open(const CreditsScreen()),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -377,7 +384,7 @@ class _MenuButton extends StatelessWidget {
       onPressed: onTap,
       icon: Icon(icon, size: 16),
       label: Text(
-        label,
+        gt(context, label),
         style: const TextStyle(
           fontFamily: 'Cinzel',
           fontWeight: FontWeight.bold,

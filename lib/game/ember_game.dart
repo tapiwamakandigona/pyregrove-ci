@@ -98,6 +98,8 @@ class EmberGame extends FlameGame
   final String levelId;
   final int? seedOverride; // tests + Daily Delve (deterministic daily seed)
   final bool daily; // Daily Delve run: wallet + daily best only, no records
+  /// Rendering only; never affects level text, simulation, codes or replay.
+  String interfaceLanguage = 'en';
 
   EmberGame({
     required this.levelId,

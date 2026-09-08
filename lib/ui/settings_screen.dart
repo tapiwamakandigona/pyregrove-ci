@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import '../audio/audio_service.dart';
 import '../audio/settings.dart';
 import '../core/save.dart';
+import '../l10n/language.dart';
 import '../telemetry/telemetry_service.dart';
 import 'app_state.dart';
 import 'credits_screen.dart';
@@ -30,7 +31,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       backgroundColor: const Color(0xFF141420),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        title: const Text(
+        title: const GroveText(
           'SETTINGS',
           style: TextStyle(
             fontFamily: 'Cinzel',
@@ -39,6 +40,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             letterSpacing: 3,
           ),
         ),
+        actions: [
+          IconButton(
+            key: const Key('open-language-picker'),
+            tooltip: gt(context, 'Language'),
+            icon: const Icon(Icons.language, color: Color(0xFFE8A33D)),
+            onPressed: () => showGroveLanguage(context),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -48,7 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // slack on Easy. Never enemy hp/damage — no cheap stat walls.
           const Padding(
             padding: EdgeInsets.only(left: 16, top: 8, bottom: 4),
-            child: Text(
+            child: GroveText(
               'DIFFICULTY',
               style: TextStyle(
                 color: Color(0xFFE8A33D),
@@ -76,9 +85,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 textStyle: const TextStyle(fontSize: 13),
               ),
               segments: const [
-                ButtonSegment(value: 'easy', label: Text('Easy')),
-                ButtonSegment(value: 'medium', label: Text('Medium')),
-                ButtonSegment(value: 'hard', label: Text('Hard')),
+                ButtonSegment(value: 'easy', label: GroveText('Easy')),
+                ButtonSegment(value: 'medium', label: GroveText('Medium')),
+                ButtonSegment(value: 'hard', label: GroveText('Hard')),
               ],
               selected: {AppState.save.difficulty},
               onSelectionChanged: (sel) {
@@ -90,13 +99,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Padding(
             padding: EdgeInsets.only(left: 16, top: 2, bottom: 8),
-            child: Text(
+            child: GroveText(
               'Enemies think faster and reach farther on Hard. '
               'Easy adds a heart of slack.',
               style: TextStyle(color: Colors.white38, fontSize: 12),
             ),
           ),
           const Divider(color: Colors.white12, height: 32),
+          SwitchListTile(
+            title: const GroveText(
+              'Forgiving jumps',
+              style: TextStyle(color: Colors.white),
+            ),
+            subtitle: const GroveText(
+              'Full-height taps, easier double jumps and a gentler fall. '
+              'Turn off for classic hold-to-jump controls. '
+              'Applies at the next level.',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            activeThumbColor: const Color(0xFFE8A33D),
+            value: AppState.save.forgivingJumps,
+            onChanged: (value) {
+              setState(() => AppState.save.forgivingJumps = value);
+              unawaited(AppState.persist());
+            },
+          ),
           if (settings != null) ...[
             _SliderTile(
               label: 'Music',
@@ -117,11 +144,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
             SwitchListTile(
-              title: const Text(
+              title: const GroveText(
                 'Haptics',
                 style: TextStyle(color: Colors.white),
               ),
-              subtitle: const Text(
+              subtitle: const GroveText(
                 'Vibrate on hits and boss beats',
                 style: TextStyle(color: Colors.white38, fontSize: 12),
               ),
@@ -134,11 +161,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
             SwitchListTile(
-              title: const Text(
+              title: const GroveText(
                 'Screen shake',
                 style: TextStyle(color: Colors.white),
               ),
-              subtitle: const Text(
+              subtitle: const GroveText(
                 'Camera kick on hits and boss beats',
                 style: TextStyle(color: Colors.white38, fontSize: 12),
               ),
@@ -151,11 +178,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
             ListTile(
-              title: const Text(
+              title: const GroveText(
                 'Control size',
                 style: TextStyle(color: Colors.white),
               ),
-              subtitle: const Text(
+              subtitle: const GroveText(
                 'Touch buttons; applies at the next level',
                 style: TextStyle(color: Colors.white38, fontSize: 12),
               ),
@@ -168,9 +195,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   visualDensity: VisualDensity.compact,
                 ),
                 segments: const [
-                  ButtonSegment(value: 0.85, label: Text('Small')),
-                  ButtonSegment(value: 1.0, label: Text('Normal')),
-                  ButtonSegment(value: 1.2, label: Text('Large')),
+                  ButtonSegment(value: 0.85, label: GroveText('Small')),
+                  ButtonSegment(value: 1.0, label: GroveText('Normal')),
+                  ButtonSegment(value: 1.2, label: GroveText('Large')),
                 ],
                 selected: {nearestControlScale(settings.controlScale)},
                 onSelectionChanged: (sel) {
@@ -181,11 +208,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             SwitchListTile(
-              title: const Text(
+              title: const GroveText(
                 'Swap control sides',
                 style: TextStyle(color: Colors.white),
               ),
-              subtitle: const Text(
+              subtitle: const GroveText(
                 'Move-pad on the right, action buttons on the left; '
                 'applies at the next level',
                 style: TextStyle(color: Colors.white38, fontSize: 12),
@@ -199,11 +226,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
             ListTile(
-              title: const Text(
+              title: const GroveText(
                 'Control height',
                 style: TextStyle(color: Colors.white),
               ),
-              subtitle: const Text(
+              subtitle: const GroveText(
                 'Lift the buttons off the bottom edge; applies at the next '
                 'level',
                 style: TextStyle(color: Colors.white38, fontSize: 12),
@@ -217,9 +244,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   visualDensity: VisualDensity.compact,
                 ),
                 segments: const [
-                  ButtonSegment(value: 0.0, label: Text('Flush')),
-                  ButtonSegment(value: 14.0, label: Text('Raised')),
-                  ButtonSegment(value: 28.0, label: Text('High')),
+                  ButtonSegment(value: 0.0, label: GroveText('Flush')),
+                  ButtonSegment(value: 14.0, label: GroveText('Raised')),
+                  ButtonSegment(value: 28.0, label: GroveText('High')),
                 ],
                 selected: {nearestControlLift(settings.controlLift)},
                 onSelectionChanged: (sel) {
@@ -231,7 +258,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ] else
             const ListTile(
-              title: Text(
+              title: GroveText(
                 'Audio unavailable',
                 style: TextStyle(color: Colors.white38),
               ),
@@ -261,7 +288,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(color: Colors.white12, height: 32),
           ListTile(
             leading: const Icon(Icons.menu_book, color: Color(0xFFE8A33D)),
-            title: const Text(
+            title: const GroveText(
               'Credits & Licenses',
               style: TextStyle(color: Colors.white),
             ),
@@ -339,7 +366,10 @@ class _SliderTile extends StatelessWidget {
       children: [
         SizedBox(
           width: 120,
-          child: Text(label, style: const TextStyle(color: Colors.white70)),
+          child: GroveText(
+            label,
+            style: const TextStyle(color: Colors.white70),
+          ),
         ),
         Expanded(
           child: Slider(

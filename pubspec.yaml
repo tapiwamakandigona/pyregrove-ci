@@ -3,13 +3,15 @@ description: "Pyregrove — pixel action-platformer in a cursed burning forest. 
 publish_to: 'none'
 
 # versionName+versionCode for Android.
-version: 1.0.0-alpha.25+37
+version: 1.0.0-alpha.26+38
 
 environment:
   sdk: ^3.8.1
 
 dependencies:
   flutter:
+    sdk: flutter
+  flutter_localizations:
     sdk: flutter
   # 2D game engine (gameplay only; meta screens are plain Flutter).
   flame: ^1.29.0

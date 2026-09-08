@@ -14,6 +14,7 @@ class Loadout {
   final int appleCapacity;
   final bool coinMagnet;
   final String skinId;
+  final bool forgivingJumps;
   final Spell? spell; // AKP-4d: equipped spell, one cast per run (null = none)
 
   const Loadout({
@@ -24,6 +25,7 @@ class Loadout {
     required this.appleCapacity,
     required this.coinMagnet,
     required this.skinId,
+    this.forgivingJumps = false,
     this.spell,
   });
 
@@ -40,7 +42,9 @@ class Loadout {
       appleCapacity: progress.appleCapacity(save),
       coinMagnet: save.ownedAbilities.contains('coin_magnet'),
       skinId: save.equippedSkin,
-      spell: save.equippedSpell.isNotEmpty &&
+      forgivingJumps: save.forgivingJumps,
+      spell:
+          save.equippedSpell.isNotEmpty &&
               save.ownedSpells.contains(save.equippedSpell)
           ? spellById(save.equippedSpell)
           : null,
@@ -48,7 +52,8 @@ class Loadout {
   }
 
   /// Bare starter loadout for tests.
-  factory Loadout.starter({Weapon? weapon}) => Loadout(
+  factory Loadout.starter({Weapon? weapon, bool forgivingJumps = false}) =>
+      Loadout(
         weapon: weapon ?? weaponById('squire_blade'),
         maxHearts: 3,
         meleePower: 1.0,
@@ -56,5 +61,6 @@ class Loadout {
         appleCapacity: 10,
         coinMagnet: false,
         skinId: 'red',
+        forgivingJumps: forgivingJumps,
       );
 }

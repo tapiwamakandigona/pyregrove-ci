@@ -274,6 +274,7 @@ class LevelSession {
       extraAirJumps: loadout.extraAirJumps,
       meleePower: loadout.meleePower,
       hasLunge: loadout.weapon.special == WeaponSpecial.lunge,
+      forgivingJumps: loadout.forgivingJumps,
     );
     cameraX = player.body.centerX;
     respawnX = player.body.x;

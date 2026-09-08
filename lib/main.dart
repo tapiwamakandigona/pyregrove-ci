@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'audio/audio_service.dart';
 import 'audio/settings.dart';
@@ -14,6 +15,7 @@ import 'telemetry/telemetry_bootstrap.dart';
 import 'telemetry/telemetry_service.dart';
 import 'ui/app_state.dart';
 import 'ui/title_screen.dart';
+import 'l10n/language.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,6 +47,7 @@ Future<void> main() async {
   // first frame: TelemetryConsentGate decides on its first post-frame
   // callback, and a not-yet-loaded "null" would re-ask on every launch.
   await TelemetryService.instance.load();
+  await GroveLanguage.load();
   unawaited(_startTelemetryAfterFirstFrame());
   // alpha.23 #35: decode the level sprites on the title screen so the first
   // PLAY of a session does not pay the cold-cache decode inside the loading
@@ -102,16 +105,22 @@ class PyregroveApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Pyregrove',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF141420),
-        fontFamily: 'Inter',
-        useMaterial3: true,
+    return ValueListenableBuilder<String>(
+      valueListenable: GroveLanguage.choice,
+      builder: (_, choice, _) => MaterialApp(
+        title: 'Pyregrove',
+        debugShowCheckedModeBanner: false,
+        supportedLocales: groveLocales,
+        locale: GroveLanguage.locale(choice),
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        theme: ThemeData(
+          brightness: Brightness.dark,
+          scaffoldBackgroundColor: const Color(0xFF141420),
+          fontFamily: 'Inter',
+          useMaterial3: true,
+        ),
+        home: const TelemetryConsentGate(child: TitleScreen()),
       ),
-      home: const TelemetryConsentGate(child: TitleScreen()),
     );
   }
 }

@@ -36,6 +36,7 @@ class PlayerCore {
   // AKP-4b: lunge special (Skypiercer) — swings burst you forward. The
   // specialText has promised this since P-M4; before AKP-4 it was stats-only.
   final bool hasLunge;
+  final bool forgivingJumps;
 
   int hearts;
   int facing = 1; // -1 left, 1 right
@@ -53,6 +54,7 @@ class PlayerCore {
   double rollCooldown = 0;
   int comboIndex = 0; // 0..kComboHits-1, index of CURRENT swing
   int airJumpsUsed = 0;
+
   /// Seconds since the last jump impulse, and whether an early release is
   /// waiting for [kMinJumpHold] to elapse before it cuts the rise.
   double sinceJump = 999;
@@ -65,6 +67,8 @@ class PlayerCore {
   // after falling >= kHardLandTiles emits landedHard alongside landed.
   double _fallTopY = double.infinity;
   bool jumpWasHeld = false;
+  bool _airJumpQueued = false;
+  bool get airJumpQueued => _airJumpQueued;
 
   /// Events emitted since the last [takeEvents] call (sfx/fx hooks).
   final List<PlayerEvent> _events = [];
@@ -79,8 +83,9 @@ class PlayerCore {
     this.extraAirJumps = 0,
     this.meleePower = 1.0,
     this.hasLunge = false,
-  })  : body = Body(x: x, y: y, w: 12, h: 20),
-        hearts = maxHearts;
+    this.forgivingJumps = false,
+  }) : body = Body(x: x, y: y, w: 12, h: 20),
+       hearts = maxHearts;
 
   bool get isDead => state == PlayerState.dead;
 
@@ -135,8 +140,7 @@ class PlayerCore {
 
     // --- horizontal
     // A roll is a commitment: velocity is locked to facing until it ends.
-    final dir =
-        (stunned || rolling) ? 0.0 : input.dirX.clamp(-1.0, 1.0);
+    final dir = (stunned || rolling) ? 0.0 : input.dirX.clamp(-1.0, 1.0);
     if (rolling) body.vx = facing * kRollSpeed;
     if (dir != 0) {
       facing = dir > 0 ? 1 : -1;
@@ -163,6 +167,7 @@ class PlayerCore {
       coyote = kCoyoteTime;
       airJumpsUsed = 0;
       airDashUsed = false; // AKP-2b: landing re-arms the air dash
+      _airJumpQueued = false;
     }
     var dropThrough = false;
     if (jumpBuffer > 0 && !stunned && !rolling) {
@@ -187,13 +192,24 @@ class PlayerCore {
         cutArmed = false;
         _events.add(PlayerEvent.jumped);
       } else if (airJumpsUsed < kMaxAirJumps + extraAirJumps) {
-        body.vy = -kAirJumpSpeed;
-        airJumpsUsed++;
+        // A queued press already owns its charge. Rapid repeated taps must
+        // neither overwrite it nor spend a triple-jump charge invisibly.
+        if (!_airJumpQueued) {
+          airJumpsUsed++;
+          if (forgivingJumps && body.vy < -kApexHangSpeed) {
+            _airJumpQueued = true;
+          } else {
+            _fireAirJump();
+          }
+        }
         jumpBuffer = 0;
-        sinceJump = 0;
-        cutArmed = false;
-        _events.add(PlayerEvent.airJumped);
       }
+    }
+    if (_airJumpQueued &&
+        !stunned &&
+        !rolling &&
+        body.vy >= kQueuedAirJumpSpeed) {
+      _fireAirJump();
     }
     // AKP-2a: dedicated dash/roll button — same commit-dodge as the
     // DOWN+JUMP chord. On the ground it is the classic roll; in the air
@@ -216,7 +232,9 @@ class PlayerCore {
     // The floor guarantees every registered jump clears one tile; holding
     // still buys the full 2+ tiles.
     sinceJump += dt;
-    if (jumpWasHeld && !input.jumpHeld && body.vy < 0) cutArmed = true;
+    if (!forgivingJumps && jumpWasHeld && !input.jumpHeld && body.vy < 0) {
+      cutArmed = true;
+    }
     if (cutArmed && body.vy < 0 && sinceJump >= kMinJumpHold) {
       body.vy *= kJumpCutMultiplier;
       cutArmed = false;
@@ -242,10 +260,16 @@ class PlayerCore {
     // landings). Rise gravity is untouched, so jump HEIGHT never changes —
     // the clearance tests pin that.
     var g = kGravity;
-    if (!body.onGround && input.jumpHeld && body.vy.abs() < kApexHangSpeed) {
+    if (!body.onGround &&
+        (input.jumpHeld || forgivingJumps) &&
+        body.vy.abs() < kApexHangSpeed) {
       g = kGravity * kApexGravityMultiplier;
     } else if (body.vy > 0) {
-      g = kGravity * kFallGravityMultiplier;
+      g =
+          kGravity *
+          (forgivingJumps
+              ? kForgivingFallGravityMultiplier
+              : kFallGravityMultiplier);
     }
     // AKP-2b: an air dash holds its height — gravity fully suspended and
     // vertical velocity zeroed for the whole dash window.
@@ -258,11 +282,16 @@ class PlayerCore {
       }
     }
     body.vy += g * dt;
-    if (body.vy > kMaxFallSpeed) body.vy = kMaxFallSpeed;
-    integrate(body, dt, tileAt,
-        dropThrough: dropThrough || input.down,
-        ceilingNudge: kCeilingCornerNudge,
-        ledgeNudge: kLedgeLandNudge);
+    final maxFall = forgivingJumps ? kForgivingMaxFallSpeed : kMaxFallSpeed;
+    if (body.vy > maxFall) body.vy = maxFall;
+    integrate(
+      body,
+      dt,
+      tileAt,
+      dropThrough: dropThrough || input.down,
+      ceilingNudge: kCeilingCornerNudge,
+      ledgeNudge: kLedgeLandNudge,
+    );
     if (body.onGround && !wasOnGround) {
       _events.add(PlayerEvent.landed);
       if (body.y - _fallTopY >= kHardLandTiles * kTileSize) {
@@ -270,6 +299,7 @@ class PlayerCore {
       }
     }
     if (body.onGround) {
+      _airJumpQueued = false;
       _fallTopY = body.y;
     } else {
       _fallTopY = math.min(_fallTopY, body.y);
@@ -297,6 +327,14 @@ class PlayerCore {
     }
   }
 
+  void _fireAirJump() {
+    _airJumpQueued = false;
+    body.vy = -kAirJumpSpeed;
+    sinceJump = 0;
+    cutArmed = false;
+    _events.add(PlayerEvent.airJumped);
+  }
+
   /// Start a roll if allowed (not mid-attack, cooldown elapsed). Shared by
   /// the DOWN+JUMP chord and the dedicated dash/roll button (AKP-2a).
   /// With [air] (AKP-2b) it becomes the air dash: same speed/i-frames but
@@ -308,6 +346,7 @@ class PlayerCore {
     if (iFrames < kRollIFrames) iFrames = kRollIFrames;
     body.vx = facing * kRollSpeed;
     if (air) {
+      _airJumpQueued = false; // never surprise-launch after a dash
       airDashUsed = true;
       _airDashing = true;
       body.vy = 0;
@@ -324,6 +363,7 @@ class PlayerCore {
   /// the i-frames lapsed.
   bool damage(int amount, {required double from, bool hazardEject = false}) {
     if (iFrames > 0 || state == PlayerState.dead) return false;
+    _airJumpQueued = false;
     hearts -= amount;
     iFrames = kHurtIFrames;
     hurtTime = 0.25;
@@ -368,6 +408,7 @@ class PlayerCore {
     rollTime = 0;
     rollCooldown = 0;
     jumpBuffer = 0;
+    _airJumpQueued = false;
     coyote = 0;
     airJumpsUsed = 0;
     airDashUsed = false;
@@ -380,6 +421,7 @@ class PlayerCore {
 
   void kill() {
     if (state == PlayerState.dead) return;
+    _airJumpQueued = false;
     hearts = 0;
     state = PlayerState.dead;
     _events.add(PlayerEvent.died);
