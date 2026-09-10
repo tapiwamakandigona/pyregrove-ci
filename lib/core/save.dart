@@ -1,5 +1,5 @@
 // core/save.dart — save schema v2 + atomic persistence.
-// Pattern kept from v1: write .tmp → rename over live file → refresh .bak.
+// Write .tmp → back up readable live data → rename over the live file.
 // Field-tolerant reads (every field has a default). Base directory is
 // injectable so tests never touch path_provider.
 
@@ -181,12 +181,14 @@ class SaveStore {
   Future<File> _bak() async => File('${(await _dir()).path}/$_fileName.bak');
   Future<File> _tmp() async => File('${(await _dir()).path}/$_fileName.tmp');
 
+  static SaveData _decode(String contents) =>
+      SaveData.fromJson(jsonDecode(contents) as Map<String, dynamic>);
+
   Future<SaveData> load() async {
     for (final f in [await _file(), await _bak()]) {
       try {
         if (!await f.exists()) continue;
-        final j = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
-        return SaveData.fromJson(j);
+        return _decode(await f.readAsString());
       } catch (_) {
         // Corrupt file → try backup; corrupt backup → fresh save.
       }
@@ -200,6 +202,9 @@ class SaveStore {
     await tmp.writeAsString(jsonEncode(data.toJson()), flush: true);
     if (await live.exists()) {
       try {
+        // Recovery may have loaded .bak while the live file is still damaged.
+        // Only rotate data that the loader can read, never corrupt the backup.
+        _decode(await live.readAsString());
         await live.copy((await _bak()).path);
       } catch (_) {}
     }
