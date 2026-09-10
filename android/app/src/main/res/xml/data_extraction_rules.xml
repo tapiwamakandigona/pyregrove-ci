@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ backup/device-transfer rules (docs/PLAY-QUALITY-2027.md).
+     Saves and settings are deliberately INCLUDED: progress should follow the
+     player to a new phone. Only cache is excluded. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="cache/" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="cache/" />
+    </device-transfer>
+</data-extraction-rules>
