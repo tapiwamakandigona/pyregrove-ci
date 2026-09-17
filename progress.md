@@ -2294,3 +2294,16 @@ Cut `1.0.0-alpha.27+39` (pubspec + lib/version.dart in lockstep). Includes
 the 2026-09-09 save-backup recovery fix, which was not in alpha.26. Release
 notes: `docs/releases/v1.0.0-alpha.27.md`. Play upload result is recorded
 below when read back; nothing is claimed until then.
+
+
+## 2026-09-18 — exact idle fix + candidate build parity
+
+VERIFIED source-only synchronization of the already-merged idle fix;
+regression copied byte-for-byte, not rewritten. Candidate version
+1.0.0-alpha.28+40 in pubspec and visible label. All original tests,
+feature objects, workflow/cert pin, assets and Android config remain.
+413 allowlisted private/public source paths match exactly;
+no signing files/private docs/history copied. Full checks and signed
+artifact inspection next. No release tag, Play upload or phone claim.
+
+VERIFIED candidate checks: Flutter3.44.9 analyzer clean; 655 passed / 2 pre-existing skips. All original tests and workflow/pin unchanged. 413 scoped payload paths match; candidate feature remains false until signed artifact readback. No Play or physical-device result.

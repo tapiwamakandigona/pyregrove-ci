@@ -91,7 +91,12 @@ void _stepY(Body b, double dt, TileQuery tileAt, bool dropThrough,
   b.y += dy;
   final tx0 = _tileLo(b.left + 0.01), tx1 = _tileHi(b.right - 0.01);
   if (dy > 0) {
-    final ty = _tileLo(b.bottom - 0.001);
+    // The downward leading edge includes its supporting tile at equality.
+    // Subtracting an epsilon here loses contact when a frame's trailing
+    // substep moves less than 0.001px. That manufactured a fall/land cycle
+    // at rest, repeatedly triggering landing SFX and the crouch squash.
+    // No outward probe: a body still above the floor is not snapped down.
+    final ty = _tileLo(b.bottom);
     for (var tx = tx0; tx <= tx1; tx++) {
       final t = tileAt(tx, ty);
       final landOnSolid = _isSolid(t);

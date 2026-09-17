@@ -3,7 +3,7 @@ description: "Pyregrove — pixel action-platformer in a cursed burning forest. 
 publish_to: 'none'
 
 # versionName+versionCode for Android.
-version: 1.0.0-alpha.27+39
+version: 1.0.0-alpha.28+40
 
 environment:
   sdk: ^3.8.1
