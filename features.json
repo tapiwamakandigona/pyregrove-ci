@@ -2,6 +2,14 @@
   "_protocol": "Workers may ONLY flip 'passes' to true and fill 'evidence' with a real proof-artifact path or URL. Never edit id/title/acceptance. Orchestrator adds features at milestone planning. Dice-era (v1) features are archived on branch legacy/dice-builder.",
   "features": [
     {
+      "id": "P-IDLE-ANDROID-CANDIDATE-20260918",
+      "title": "Signed Android candidate closes the private-source/public-build gap",
+      "acceptance": "Public mirror runtime/assets/tests/dependencies match the exact private candidate; original 84 private test files and all original public tests unchanged; analyzer/full suite green with only two pre-existing skips; unchanged CI builds signed APK/AAB for 1.0.0-alpha.28+40; downloaded package/version/signer and hashes independently verified. No Play or phone pass inferred.",
+      "verify": "Exact source hash comparison; flutter analyze and full flutter test; original CI run/source readback; downloaded APK/AAB identity/certificate/digest checks",
+      "passes": false,
+      "evidence": ""
+    },
+    {
       "id": "P-CONTROLS-FOOTPRINT-20260910",
       "title": "Default touch clusters cover <= 19% of the view, every button >= 60 dp",
       "acceptance": "Always-visible HUD buttons (arrows, down, sword, jump, dash, pause) at default scale cover <= 19% of the 352x198 view and > 10% (finger-sized); no button under 38 view units (>= 60 dp at scale 1.6); no overlaps at Small/Normal/Large; safe-area, mirror and lift behaviour unchanged; analyzer clean and full suite green.",

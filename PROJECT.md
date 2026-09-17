@@ -1,5 +1,15 @@
 # PROJECT.md — Pyregrove (formerly Emberwood / Emberdelve v2: action platformer)
 
+## Current CI parity snapshot — 2026-09-18
+
+This public repository is only the CI mirror, not the source of truth.
+Synchronize the existing private-source idle-ground-contact fix and exact
+regression plus candidate version `1.0.0-alpha.28+40`. No new gameplay design,
+test weakening, asset changes, signing files, private documents/history,
+force-push, release tag or Play upload. Existing workflow and cert pin remain.
+The canonical source and scoped payload receipt are recorded in MIRROR.md.
+Full-suite success and signed artifacts are not physical-phone acceptance.
+
 ## Checked save-backup recovery fix — 2026-09-09
 
 Read [backup recovery](docs/save-backup-recovery-sep09.md). An unreadable live
