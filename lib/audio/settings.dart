@@ -32,6 +32,12 @@ class AudioSettings {
   double controlLift;
   static const controlLiftMin = 0.0;
   static const controlLiftMax = 28.0;
+
+  /// Fill the whole screen on wide phones (alpha.29): the game view keeps
+  /// its 198px height and widens to the phone's shape (up to 21:9) instead
+  /// of showing black bands at the sides. Off = the classic 16:9 framing.
+  /// Applied at level start, like the control settings.
+  bool fillScreen;
   AudioSettings({
     this.musicVolume = 0.7,
     this.sfxVolume = 0.9,
@@ -42,6 +48,7 @@ class AudioSettings {
     this.controlScale = 1.0,
     this.mirrorControls = false,
     this.controlLift = 0.0,
+    this.fillScreen = true,
   });
 
   double get effectiveMusic => musicMuted ? 0.0 : musicVolume;
@@ -57,6 +64,7 @@ class AudioSettings {
     'controlScale': controlScale,
     'mirrorControls': mirrorControls,
     'controlLift': controlLift,
+    'fillScreen': fillScreen,
   };
 
   // Volumes clamped on load: an out-of-range value in a hand-edited or
@@ -81,6 +89,7 @@ class AudioSettings {
       controlLiftMin,
       controlLiftMax,
     ),
+    fillScreen: j['fillScreen'] as bool? ?? true,
   );
 }
 

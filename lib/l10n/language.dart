@@ -107,6 +107,12 @@ const groveCatalog = <String, List<String>>{
     'Sacudidas con golpes y ataques de jefes',
     'Tremor nos golpes e ataques dos chefes',
   ],
+  'Fill screen': ['Plein écran', 'Pantalla completa', 'Tela cheia'],
+  'Use the whole width of wide phones': [
+    "Utiliser toute la largeur des téléphones larges",
+    'Usar todo el ancho de los teléfonos anchos',
+    'Usar toda a largura dos celulares largos',
+  ],
   'Control size': [
     'Taille des commandes',
     'Tamaño de controles',

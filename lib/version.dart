@@ -4,4 +4,4 @@
 // which build they're on (DEMAND pillar 4: honest presentation). Kept in
 // lockstep with pubspec.yaml by test/version_test.dart — bump both or the
 // suite fails.
-const String kAppVersion = '1.0.0-alpha.28+40';
+const String kAppVersion = '1.0.0-alpha.29+41';

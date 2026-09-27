@@ -177,6 +177,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 unawaited(SettingsStore.save(settings));
               },
             ),
+            SwitchListTile(
+              title: const GroveText(
+                'Fill screen',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: const GroveText(
+                'Use the whole width of wide phones',
+                style: TextStyle(color: Colors.white38, fontSize: 12),
+              ),
+              activeThumbColor: const Color(0xFFE8A33D),
+              value: settings.fillScreen,
+              onChanged: (v) {
+                setState(() => settings.fillScreen = v);
+                AudioService.instance?.playSfx('ui_tap');
+                unawaited(SettingsStore.save(settings));
+              },
+            ),
             ListTile(
               title: const GroveText(
                 'Control size',
