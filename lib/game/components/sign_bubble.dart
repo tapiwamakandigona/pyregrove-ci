@@ -65,8 +65,9 @@ class SignBubbleComponent extends PositionComponent
     // clip long sign text at the screen edge whenever the look-ahead camera
     // pushed the sign off-centre.
     final cam = game.cameraPos;
-    final minLeft = cam.x - EmberGame.viewWidth / 2 + 2;
-    final maxLeft = cam.x + EmberGame.viewWidth / 2 - w - 2;
+    final halfView = game.viewW / 2;
+    final minLeft = cam.x - halfView + 2;
+    final maxLeft = cam.x + halfView - w - 2;
     var left = active.x - w / 2;
     if (left > maxLeft) left = maxLeft;
     if (left < minLeft) left = minLeft;

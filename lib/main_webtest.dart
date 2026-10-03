@@ -145,12 +145,16 @@ void main() {
   final mirror = params['mirror'] == '1' ? true : null;
   // ?lift=0|14|28 — Settings > Control height preview (alpha.23).
   final lift = double.tryParse(params['lift'] ?? '');
+  // ?fill=0|1 — Settings > Fill screen preview (alpha.29). The harness has
+  // no settings store, so it defaults to the app's default (on).
+  final fill = params['fill'] != '0';
   final game = EmberGame(
     levelId: levelId,
     seedOverride: seed,
     hudScaleOverride: controls,
     hudMirroredOverride: mirror,
     hudLiftOverride: lift,
+    fillScreenOverride: fill,
   );
   // ?slowmo=0.1 stretches sim + animation time (harness only) so a swing
   // frame can be screenshotted deterministically.

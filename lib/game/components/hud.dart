@@ -463,6 +463,13 @@ class HudReadout extends PositionComponent with HasGameReference<EmberGame> {
       }
     }
 
+    // Top-centre block (boss bar + name, lore intro, timer): its geometry is
+    // laid out for the 352px design view; on a wider fill-screen view shift
+    // the whole block so it stays centred (one translate, no re-layout).
+    final centreShift = (game.viewW - EmberGame.viewWidth) / 2;
+    canvas.save();
+    if (centreShift != 0) canvas.translate(centreShift, 0);
+
     // Boss HP bar (top-center, under the timer) with phase threshold ticks.
     // Hidden while the boss is dormant: the bar appearing IS the intro beat.
     final boss = s.boss;
@@ -505,6 +512,7 @@ class HudReadout extends PositionComponent with HasGameReference<EmberGame> {
       _timerText.text = '$mm:$ss';
     }
     _timerText.paint(canvas);
+    canvas.restore();
   }
 }
 

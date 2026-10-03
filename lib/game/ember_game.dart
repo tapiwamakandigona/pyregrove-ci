@@ -8,6 +8,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flame/camera.dart';
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/flame.dart';
@@ -36,6 +37,7 @@ import '../meta/daily.dart';
 import '../meta/progress_state.dart';
 import '../ui/app_state.dart';
 import 'camera_frame.dart';
+import 'flex_viewport.dart';
 import 'components/apple_arc_preview.dart';
 import 'components/ash_decal.dart';
 import 'components/decor_layer.dart';
@@ -91,6 +93,24 @@ class EmberGame extends FlameGame
   static const double viewWidth = 352;
   static const double viewHeight = 198;
 
+  /// Widest view (21:9) when [fillScreen] is on; see flex_viewport.dart.
+  /// [viewWidth] stays the 16:9 design width (and the minimum).
+  static const double viewWidthMax = 462;
+
+  /// Fill wide phones edge to edge (Settings > Fill screen, alpha.29).
+  final bool fillScreen;
+
+  /// Visible world width for the current canvas: [viewWidth] on 16:9 (or
+  /// with [fillScreen] off), up to [viewWidthMax] on 21:9 phones. Every
+  /// layout that used to assume 352 reads this instead.
+  double get viewW => FlexWidthViewport.widthFor(
+    _canvas,
+    height: viewHeight,
+    minWidth: viewWidth,
+    maxWidth: viewWidthMax,
+    fill: fillScreen,
+  );
+
   static const overlayPause = 'pause';
   static const overlayResults = 'results';
   static const overlayFail = 'fail';
@@ -108,7 +128,12 @@ class EmberGame extends FlameGame
     double? hudScaleOverride,
     bool? hudMirroredOverride,
     double? hudLiftOverride,
-  }) : hudScale =
+    bool? fillScreenOverride,
+  }) : fillScreen =
+           fillScreenOverride ??
+           AudioService.instance?.settings.fillScreen ??
+           false,
+       hudScale =
            (hudScaleOverride ??
                    AudioService.instance?.settings.controlScale ??
                    1.0)
@@ -129,9 +154,17 @@ class EmberGame extends FlameGame
                  AudioSettings.controlLiftMax,
                ),
        super(
-         camera: CameraComponent.withFixedResolution(
-           width: viewWidth,
-           height: viewHeight,
+         camera: CameraComponent(
+           viewport: FlexWidthViewport(
+             height: viewHeight,
+             minWidth: viewWidth,
+             maxWidth: viewWidthMax,
+             fill:
+                 fillScreenOverride ??
+                 AudioService.instance?.settings.fillScreen ??
+                 false,
+           ),
+           viewfinder: Viewfinder(),
          ),
        ) {
     // Pre-register the component-event dispatchers. If we left this to
@@ -243,7 +276,7 @@ class EmberGame extends FlameGame
   /// World → viewport (HUD) coordinates for a point.
   Vector2 worldToScreen(Vector2 w) {
     final cam = camera.viewfinder.position;
-    return Vector2(w.x - cam.x + viewWidth / 2, w.y - cam.y + viewHeight / 2);
+    return Vector2(w.x - cam.x + viewW / 2, w.y - cam.y + viewHeight / 2);
   }
 
   /// Coin pickup feedback (alpha.23): a small coin flies from the pickup to
@@ -269,7 +302,7 @@ class EmberGame extends FlameGame
     final b = session.player.body;
     final cam = camera.viewfinder.position;
     return ui.Rect.fromLTWH(
-      b.x - cam.x + viewWidth / 2,
+      b.x - cam.x + viewW / 2,
       b.y - cam.y + viewHeight / 2,
       b.w,
       b.h,
@@ -410,9 +443,10 @@ class EmberGame extends FlameGame
   /// The fixed-resolution viewport is scaled uniformly and letterboxed; any
   /// part of an inset that falls inside the letterbox band costs nothing.
   EdgeInsets get hudSafeInsets {
-    final scale = math.min(_canvas.x / viewWidth, _canvas.y / viewHeight);
+    final vw = viewW;
+    final scale = math.min(_canvas.x / vw, _canvas.y / viewHeight);
     if (scale <= 0) return EdgeInsets.zero;
-    final boxX = (_canvas.x - viewWidth * scale) / 2;
+    final boxX = (_canvas.x - vw * scale) / 2;
     final boxY = (_canvas.y - viewHeight * scale) / 2;
     double side(double inset, double box) => math.max(0, (inset - box) / scale);
     return EdgeInsets.fromLTRB(
@@ -440,7 +474,8 @@ class EmberGame extends FlameGame
     final clusterInsL = hudMirrored ? ins.right : ins.left;
     final clusterInsR = hudMirrored ? ins.left : ins.right;
     final left = hudPad + clusterInsL;
-    final right = viewWidth - hudPad - clusterInsR;
+    final vw = viewW;
+    final right = vw - hudPad - clusterInsR;
     final top = hudPad + ins.top;
     // Control height: lift both clusters, but the tallest cluster button
     // (spell, capping the dash column) must stay inside the top safe pad.
@@ -492,7 +527,7 @@ class EmberGame extends FlameGame
         _btnThrow!,
         _btnSpell!,
       ]) {
-        b.position.x = viewWidth - b.position.x - b.size.x;
+        b.position.x = vw - b.position.x - b.size.x;
       }
       final lx = _btnLeft!.position.x;
       _btnLeft!.position.x = _btnRight!.position.x;
@@ -500,7 +535,7 @@ class EmberGame extends FlameGame
     }
 
     _btnPause!.position.setValues(
-      viewWidth - hudPad - ins.right - hudSmallBtnBase,
+      vw - hudPad - ins.right - hudSmallBtnBase,
       top,
     );
     _readout!.position.setValues(ins.left, ins.top);
@@ -1048,7 +1083,7 @@ class EmberGame extends FlameGame
       targetX = bossCameraTargetX(
         playerX: p.body.centerX,
         bossX: boss.centerX,
-        viewWidth: viewWidth,
+        viewWidth: viewW,
       );
     }
     final peeking =
@@ -1060,9 +1095,10 @@ class EmberGame extends FlameGame
     // Clamp to level bounds (center the axis when the level is smaller).
     final levelW = session.level.width * kTileSize;
     final levelH = session.level.height * kTileSize;
-    targetX = levelW <= viewWidth
+    final vw = viewW;
+    targetX = levelW <= vw
         ? levelW / 2
-        : targetX.clamp(viewWidth / 2, levelW - viewWidth / 2);
+        : targetX.clamp(vw / 2, levelW - vw / 2);
     targetY = levelH <= viewHeight
         ? levelH / 2
         : targetY.clamp(viewHeight / 2, levelH - viewHeight / 2);
@@ -1087,11 +1123,31 @@ class EmberGame extends FlameGame
     // full-screen shimmer/judder whenever the camera pans (i.e. whenever
     // the player moves). Smoothing runs on unrounded floats so no motion is
     // lost; only the rendered position is quantized to whole world pixels.
+    //
+    // alpha.29: quantize to whole PHYSICAL pixels instead of whole world
+    // pixels. One world px is ~5 physical px on a phone, so the old snap
+    // moved the scene in 5-6 px jumps and, because the player is drawn at
+    // unrounded positions, made the knight wobble up to ~3 px on screen while
+    // the camera followed him. A physical-pixel step keeps every tile shifting
+    // by a whole number of device pixels (same crisp nearest-neighbour look,
+    // no resampling shimmer) and makes the follow read smooth.
+    final unit = pixelSnap;
     camera.viewfinder.position = _camRender
       ..setValues(
-        _camSmoothX.roundToDouble(),
-        (_camSmoothY + bumpY).roundToDouble(),
+        (_camSmoothX / unit).roundToDouble() * unit,
+        ((_camSmoothY + bumpY) / unit).roundToDouble() * unit,
       );
+  }
+
+  /// World px per physical screen pixel (the camera/backdrop snap step).
+  /// 1.0 until the viewport is laid out (and never above 1).
+  double get pixelSnap {
+    final vp = camera.viewport;
+    final scale = vp is FlexWidthViewport ? vp.scaleFactor : 1.0;
+    final dpr =
+        ui.PlatformDispatcher.instance.implicitView?.devicePixelRatio ?? 1.0;
+    final px = scale * dpr;
+    return px > 1 ? 1 / px : 1.0;
   }
 
   // Unrounded camera state (smoothing accumulator) + scratch render vector.
