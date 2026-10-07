@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # Flutter stable pinned. Update deliberately (channel stable, Dart >= 3.8.1; 3.44.9 required for SwitchListTile.activeThumbColor).
+  FLUTTER_VERSION: 3.44.9
+
+jobs:
+  test:
+    name: Analyze + test (headless)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Pub get
+        run: flutter pub get
+      - name: Analyze (fatal on warnings)
+        run: flutter analyze
+      - name: Test (sim determinism, map, content, autoplay balance, UI smoke)
+        run: flutter test
+
+  build-android-release:
+    name: Build signed Android release (APK + AAB)
+    needs: test
+    # Signed release builds on main pushes and manual dispatches only.
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    env:
+      # Permanent Pyregrove upload key cert SHA-256 (apksigner, hex, no colons).
+      # Keystore + key.properties live IN this private repo (owner directive
+      # 2026-08-31: any AI/collaborator with repo access can build signed).
+      # If this check ever fails, FIX THE PLUMBING — never regenerate the key.
+      EXPECTED_CERT_SHA256: 286c4760f1801269550fe40658e6255c96107713690d0e4353cbe76bccee8ffd
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Pub get
+        run: flutter pub get
+      - name: Restore signing config (secrets fallback for the public CI mirror)
+        # Private repo (tapiwamakandigona/pyregrove): keystore + key.properties
+        # are COMMITTED — this step is a no-op.
+        # Public CI mirror (tapiwamakandigona/pyregrove-ci): keys are stripped
+        # from the tree, so restore them from Actions secrets
+        # UPLOAD_KEYSTORE_B64 / KEY_PROPERTIES_B64 (same permanent key).
+        run: |
+          set -euo pipefail
+          if [ ! -f android/key.properties ]; then
+            echo "key.properties missing -> restoring signing from secrets"
+            mkdir -p android/signing
+            printf '%s' "${{ secrets.UPLOAD_KEYSTORE_B64 }}" | base64 -d > android/signing/upload.keystore
+            printf '%s' "${{ secrets.KEY_PROPERTIES_B64 }}" | base64 -d > android/key.properties
+          fi
+          test -s android/key.properties
+          test -s android/signing/upload.keystore
+      - name: Build release APK
+        run: flutter build apk --release
+      - name: Build release AAB
+        run: flutter build appbundle --release
+      - name: Verify APK signing certificate (must be the permanent upload key)
+        run: |
+          set -euo pipefail
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          echo "Using apksigner: $APKSIGNER"
+          "$APKSIGNER" verify --print-certs "$APK" | tee apksigner-out.txt
+          ACTUAL="$(grep -m1 'certificate SHA-256 digest' apksigner-out.txt | awk '{print $NF}')"
+          rm -f apksigner-out.txt
+          echo "APK cert SHA-256:      $ACTUAL"
+          echo "Expected (permanent):  $EXPECTED_CERT_SHA256"
+          if [ "$ACTUAL" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "::error::APK is NOT signed with the permanent upload key. Do NOT deliver this build. Fix the signing plumbing — never regenerate the keystore."
+            exit 1
+          fi
+          echo "Signature OK: APK is signed with the permanent upload key."
+      - name: Upload release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyregrove-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload release AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyregrove-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30

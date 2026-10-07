@@ -1,0 +1,15 @@
+gradle-wrapper.jar
+/.gradle
+/captures/
+/gradlew
+/gradlew.bat
+/local.properties
+GeneratedPluginRegistrant.java
+.cxx/
+
+# Owner directive 2026-08-31: this repo is PRIVATE and the upload keystore +
+# key.properties are committed ON PURPOSE so any collaborator/AI can build
+# signed releases. NEVER make this repo public while these files exist.
+!key.properties
+!signing/upload.keystore
+**/*.jks
